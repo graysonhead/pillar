@@ -1,0 +1,2 @@
+class IPRPCException(Exception):
+    pass
