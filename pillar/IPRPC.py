@@ -47,3 +47,13 @@ class IPRPCRegistry:
         class_name = rpc_dict.get('message_type')
         target_class = cls.message_types.get(class_name)
         return target_class(**rpc_dict)
+
+
+class PingType:
+    REQUEST = 1
+    RESPONSE = 2
+
+
+@IPRPCRegistry.register_rpc_call
+class PingRPC(IPRPCCall):
+    attributes = {"ping_type": int}

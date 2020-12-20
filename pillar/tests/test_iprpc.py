@@ -1,5 +1,5 @@
 from unittest import TestCase
-from ..IPRPC import IPRPCCall, IPRPCRegistry
+from ..IPRPC import IPRPCCall, IPRPCRegistry, PingRPC, PingType
 from ..exceptions import IPRPCException
 
 
@@ -63,3 +63,10 @@ class TestIPRPCCall(TestCase):
         result = test_message.serialize_to_json()
         expected = """{"message_type": "TestRPCCall", "test": "Hello"}"""
         self.assertEqual(expected, result)
+
+
+class TestPingRPCCall(TestCase):
+
+    def test_create_ping_call(self):
+        ping_instance = PingRPC(ping_type=PingType.REQUEST)
+        self.assertEqual(PingRPC, type(ping_instance))
