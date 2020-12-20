@@ -2,10 +2,10 @@ from .config import Config
 import logging
 from gnupg import GPG
 import aioipfs
-
+import os
 
 os.makedirs(Config.gpghome, exist_ok=True)
-pg = GPG(gnupghome=Config.gpghome)
+gpg = GPG(gnupghome=Config.gpghome)
 
 class User(object):
     pubkey_cid = pubkey = fingerprint = name = comment = email = None

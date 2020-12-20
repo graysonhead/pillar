@@ -1,6 +1,6 @@
-from src.pillar.user import MyUser, PeerUser
-from src.pillar.config import Config
-from src.pillar.community import Community
+from pillar.user import MyUser, PeerUser
+from pillar.config import Config
+from pillar.community import Community
 import asyncio
 
 if __name__ == "__main__":
@@ -22,3 +22,4 @@ if __name__ == "__main__":
     loop.run_until_complete(community.send_message(user.pubkey_cid, spencer.pubkey_cid, user.pubkey_cid))
 
     
+

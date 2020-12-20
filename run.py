@@ -1,6 +1,6 @@
-from src.pillar.user import MyUser
-from src.pillar.config import Config
-from src.pillar.community import Community
+from pillar.user import MyUser
+from pillar.config import Config
+from pillar.community import Community
 import asyncio
 
 if __name__ == "__main__":
