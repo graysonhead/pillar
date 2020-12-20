@@ -3,7 +3,9 @@ import logging
 from gnupg import GPG
 import aioipfs
 
-gpg = GPG(gnupghome=Config.gpghome)
+
+os.makedirs(Config.gpghome, exist_ok=True)
+pg = GPG(gnupghome=Config.gpghome)
 
 class User(object):
     pubkey_cid = pubkey = fingerprint = name = comment = email = None
