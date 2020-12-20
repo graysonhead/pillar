@@ -11,8 +11,8 @@ class TestIPRPCRegistry(TestCase):
         class TestRPCCall(IPRPCCall):
             attributes = {"test": str}
 
-        expected = {"TestRPCCall": TestRPCCall}
-        self.assertEqual(expected, IPRPCRegistry.message_types)
+        result = IPRPCRegistry.message_types.get("TestRPCCall")
+        self.assertEqual(TestRPCCall, result)
 
     def test_iprpcregistry_json_deserialization(self):
         @IPRPCRegistry.register_rpc_call
