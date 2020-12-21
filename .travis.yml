@@ -5,10 +5,12 @@ python:
   - "3.8"
   - "3.8-dev"  # 3.8 development branch
 install:
-    - pip install codecov
+    - pip install -r requirements/test.txt
 script:
   - pytest
+  - python -m flake8 pillar
   - coverage run --source pillar setup.py test
+
 
 after_success:
   - codecov

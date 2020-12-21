@@ -4,8 +4,9 @@ from .exceptions import IPRPCException
 
 class IPRPCCall:
     """
-    This class represents an IPRPC (InterPlanetary Remote Procedure Call) call. It will be wrapped in a message before
-    sending to an IPFS Pubsub queue.
+    This class represents an IPRPC
+    (InterPlanetary Remote Procedure Call) call. It will be wrapped in a
+    message before sending to an IPFS Pubsub queue.
     """
     attributes = {}
 
@@ -13,7 +14,8 @@ class IPRPCCall:
         self.message_type = self.__class__.__name__
         for attr in self.attributes.keys():
             if attr not in kwargs.keys():
-                raise IPRPCException(f"Message not valid: {kwargs}. Missing arg {attr}")
+                raise IPRPCException(f"Message not valid:"
+                                     f" {kwargs}. Missing arg {attr}")
         for arg, value in kwargs.items():
             if arg == "message_type":
                 pass
@@ -22,11 +24,15 @@ class IPRPCCall:
                     intended_type = self.attributes.get(arg)
                     if not type(value) == intended_type:
                         raise IPRPCException(
-                            f"Message not valid: {kwargs}. Value {value} is not type {intended_type}."
+                            f"Message not valid:"
+                            f" {kwargs}. "
+                            f"Value {value} is not type {intended_type}."
                         )
                 else:
                     raise IPRPCException(
-                        f"Message not valid: {kwargs}. Arg {arg} is not valid for this message type."
+                        f"Message not valid:"
+                        f" {kwargs}. "
+                        f"Arg {arg} is not valid for this message type."
                     )
             setattr(self, arg, value)
 
@@ -95,19 +101,28 @@ class IPRPCMessage:
 
     def _validate(self):
         if self.broadcast and self.dst_peer:
-            raise IPRPCException("Invalid message, cannot have broadcast arg set with dst_peer arg present")
+            raise IPRPCException("Invalid message, "
+                                 "cannot have broadcast arg "
+                                 "set with dst_peer arg present")
         if not self.broadcast and not self.dst_peer:
-            raise IPRPCException("Invalid message, broadcast False but missing dst_peer arg")
-        if self.msg_type == IPRPCMessageType.INLINE or self.msg_type == IPRPCMessageType.INLINE_ENCRYPTED:
+            raise IPRPCException("Invalid message, broadcast False but missing"
+                                 " dst_peer arg")
+        if self.msg_type == IPRPCMessageType.INLINE \
+                or self.msg_type == IPRPCMessageType.INLINE_ENCRYPTED:
             if self.msg_cid:
-                raise IPRPCException("Invalid message, cannot be type inline with msg_cid arg")
+                raise IPRPCException("Invalid message, "
+                                     "cannot be type inline with msg_cid arg")
             if not self.call:
-                raise IPRPCException("Invalid message, INLINE type must have call arg")
-        if self.msg_type == IPRPCMessageType.CID or self.msg_type == IPRPCMessageType.CID_ENCRYPTED:
+                raise IPRPCException("Invalid message, "
+                                     "INLINE type must have call arg")
+        if self.msg_type == IPRPCMessageType.CID \
+                or self.msg_type == IPRPCMessageType.CID_ENCRYPTED:
             if self.call:
-                raise IPRPCException("Invalid message, cannot be type CID with call arg")
+                raise IPRPCException("Invalid message, "
+                                     "cannot be type CID with call arg")
             if not self.msg_cid:
-                raise IPRPCException("Invalid message, CID type must have msg_cid arg")
+                raise IPRPCException("Invalid message, "
+                                     "CID type must have msg_cid arg")
 
     def serialize_to_json(self):
         if self.msg_type == IPRPCMessageType.INLINE:
@@ -130,7 +145,8 @@ class IPRPCMessage:
         pass
         message_dict = json.loads(json_string)
         if message_dict.get("call", None):
-            call_instance = IPRPCRegistry.deserialize_from_dict(message_dict.get('call'))
+            call_instance = \
+                IPRPCRegistry.deserialize_from_dict(message_dict.get('call'))
             message_dict.update({'call': call_instance})
         return IPRPCMessage(**message_dict)
 
