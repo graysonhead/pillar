@@ -1,29 +1,30 @@
-from .config import Config
 import logging
-from gnupg import GPG
-import aioipfs
 import os
+from enum import Enum
+import aioipfs
+from gnupg import GPG
+from .config import Config
 
 os.makedirs(Config.gpghome, exist_ok=True)
 gpg = GPG(gnupghome=Config.gpghome)
 
-class User(object):
-    pubkey_cid = pubkey = fingerprint = name = comment = email = None
+class User:
+    """A generic user."""
+    pubkey_cid = pubkey = key_props = fingerprint = name = comment = email = None
 
     def __init__(self, cid):
         self.pubkey_cid = cid
-        
-    async def _init(self):
-        self.parse_own_cid()
 
     async def get_pubkey(self):
+        """get the public key associated with our user from ipfs"""
         client = aioipfs.AsyncIPFS()
         self.pubkey = client.get(self.pubkey_cid)
         await client.close()
 
     async def parse_own_cid(self):
+        """Parse the cid associated with our user"""
         client = aioipfs.AsyncIPFS()
-        # todo: we need to find a way to avoid writing the content out to disk.
+        # todo: we need to find a way to manage where we write the content to disk.
         await client.get(self.pubkey_cid, dstdir='.' + self.pubkey_cid)
         await client.close()
         key = open(Config.pubkey_path, 'r')
@@ -35,50 +36,42 @@ class User(object):
 
 
 class PeerUser(User):
-    pass
+    """A peer user represents another person on the network."""
+    async def _init(self):
+        self.parse_own_cid()
+
 
 class MyUser(User):
     """
-The MyUser class extends the user class by adding methods to interact with gpg, e.g. generating keys, signing peer keys, sharing 
-signed keys, revoking signatures or sharing revocations.
-The fundamental way a user interacts with the web of trust, i.e., gnupg, is through the interactions between MyUser and PeerUser.
-
-This is a departure from the traditional WOT concept of a keyserver. Here, sharing exported signed keys, revocations, importing, et
- c. are explicit and selective operations. With a traditional keyserver, exporting a signature to the server means telling everyone
-that you trust the key, and maybe you don't want everyone in the community to know that you are utilizing resources from that peer
- 
-Alternatively, maybe you disagree with the decisions of the DC engineer at one location and you'd like to revoke your trust . and 
-one of your trust database changes are shared implicitly. It's not meant to be 
-
-Config cid has the highest precedence when determining our user, followed by on-disk pubkey file (our users cid is calculated from 
-this file).
+    The MyUser class extends the user class by adding methods to interact with gpg, e.g.
+    generating keys,signing peer keys, sharing signed keys, revoking signatures
+    or sharing revocations.
     """
-    def __init__(self):
-        pass
-    
+    def __init__(self, cid = None):
+        super(self.__class__).__init__(self, cid)
+
     async def _init(self, cid = None, name_real = None, name_comment = None, name_email = None):
-        if cid is None:
-            try:
-                self.pubkey_cid = Config.cid
-            except:
+        if cid is not None:
+            self.pubkey_cid = cid
+        else:
+            self.pubkey_cid = Config.cid
+            if self.pubkey_cid is None:
                 try:
                     await self.create_pubkey_cid()
-                except:
+                except Exception:
                     self.generate_keypair(name_real, name_comment, name_email)
                     await self.create_pubkey_cid()
-        else:
-            self.pubkey_cid = cid
-            
+
         await self.parse_own_cid()
 
-                 
     def generate_keypair(self,
                          name_real,
                          name_comment,
                          name_email,
                          key_type=Config.default_key_type,
                          key_length=Config.default_key_length):
-        
+        """Generate a new keypair and assign it to MyUser"""
+
         inputdata = gpg.gen_key_input(key_type=key_type,
                                       key_length=key_length,
                                       name_real=name_real,
@@ -87,28 +80,29 @@ this file).
         key = gpg.gen_key(inputdata)
         self.fingerprint = key.fingerprint
         key_data = gpg.export_keys(self.fingerprint)
-        
-        with open(Config.pubkey_path, 'w+') as f:
-            f.write(key_data)
-        
+
+        with open(Config.pubkey_path, 'w+') as file:
+            file.write(key_data)
+
 
     async def create_pubkey_cid(self):
+        """Add the user's public key to ipfs"""
         client = aioipfs.AsyncIPFS()
         async for result in client.add(Config.pubkey_path):
-            print(result)
             self.pubkey_cid = result['Hash']
         await client.close()
-        
-        
-    def trust(self, peer: PeerUser, trustlevel):
-        gpg.trust_keys([peer.fingerprint], trustlevel)
-        
 
-class TrustLevels(object):
+    @staticmethod
+    def trust(peer: PeerUser, trustlevel):
+        """Set the trust level for the given peer user's key"""
+        gpg.trust_keys([peer.fingerprint], trustlevel)
+
+
+class TrustLevels(Enum):
+    """These are the trust levels defined in gnupg"""
     TRUST_UNDEFINED = 'TRUST_UNDEFINED'
     TRUST_NEVER = 'TRUST_NEVER'
     TRUST_MARGINAL = 'TRUST_MARGINAL'
     TRUST_FULLY = 'TRUST_FULLY'
     TRUST_ULTIMATE = 'TRUST_ULTIMATE'
-    
 
