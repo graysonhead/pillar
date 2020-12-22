@@ -84,19 +84,10 @@ class IPRPCMessage:
                  ):
 
         self.msg_type = msg_type
-        if dst_peer:
-            self.dst_peer = dst_peer
-        else:
-            self.dst_peer = None
-        if msg_cid:
-            self.msg_cid = msg_cid
-        else:
-            self.msg_cid = None
         self.broadcast = broadcast
-        if call:
-            self.call = call
-        else:
-            self.call = None
+        self.dst_peer = dst_peer or None
+        self.msg_cid = msg_cid or None
+        self.call = call or None
         self._validate()
 
     def _validate(self):
