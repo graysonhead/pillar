@@ -1,4 +1,3 @@
-import logging
 import os
 from enum import Enum
 import aioipfs
@@ -8,9 +7,16 @@ from .config import Config
 os.makedirs(Config.gpghome, exist_ok=True)
 gpg = GPG(gnupghome=Config.gpghome)
 
+
 class User:
     """A generic user."""
-    pubkey_cid = pubkey = key_props = fingerprint = name = comment = email = None
+    pubkey_cid = None
+    pubkey = None
+    key_props = None
+    fingerprint = None
+    name = None
+    comment = None
+    email = None
 
     def __init__(self, cid):
         self.pubkey_cid = cid
@@ -24,7 +30,8 @@ class User:
     async def parse_own_cid(self):
         """Parse the cid associated with our user"""
         client = aioipfs.AsyncIPFS()
-        # todo: we need to find a way to manage where we write the content to disk.
+        # todo: we need to find a way to manage where we write the
+        # content to disk.
         await client.get(self.pubkey_cid, dstdir='.' + self.pubkey_cid)
         await client.close()
         key = open(Config.pubkey_path, 'r')
@@ -43,14 +50,20 @@ class PeerUser(User):
 
 class MyUser(User):
     """
-    The MyUser class extends the user class by adding methods to interact with gpg, e.g.
-    generating keys,signing peer keys, sharing signed keys, revoking signatures
-    or sharing revocations.
+    The MyUser class extends the user class by adding methods to interact with
+    gpg, e.g generating keys,signing peer keys, sharing signed keys, revoking
+    signatures or sharing revocations.
     """
-    def __init__(self, cid = None):
+
+    def __init__(self, cid=None):
         super(self.__class__).__init__(self, cid)
 
-    async def _init(self, cid = None, name_real = None, name_comment = None, name_email = None):
+    async def _init(self,
+                    cid=None,
+                    name_real=None,
+                    name_comment=None,
+                    name_email=None
+                    ):
         if cid is not None:
             self.pubkey_cid = cid
         else:
@@ -84,7 +97,6 @@ class MyUser(User):
         with open(Config.pubkey_path, 'w+') as file:
             file.write(key_data)
 
-
     async def create_pubkey_cid(self):
         """Add the user's public key to ipfs"""
         client = aioipfs.AsyncIPFS()
@@ -105,4 +117,3 @@ class TrustLevels(Enum):
     TRUST_MARGINAL = 'TRUST_MARGINAL'
     TRUST_FULLY = 'TRUST_FULLY'
     TRUST_ULTIMATE = 'TRUST_ULTIMATE'
-
