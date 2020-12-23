@@ -1,5 +1,5 @@
 import aioipfs
-from .messages import IPRPCMessage, IPRPCRegistry
+from .messages import IPRPCMessage
 from ..exceptions import IPRPCMessageException
 import logging
 import base64
