@@ -19,7 +19,6 @@ class Channel:
         serialized_message = message.serialize_to_json()
         self.logger.info(f"Sending message: {serialized_message}")
         message_bytes = base64.b64encode(serialized_message.encode())
-        print(message_bytes)
         async with self.ipfs as cli:
             await cli.pubsub.pub(self.queue_id,
                                  message_bytes.decode())
