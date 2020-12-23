@@ -1,11 +1,11 @@
 from unittest import TestCase
-from ..IPRPC import IPRPCCall, \
+from ..messages import IPRPCCall, \
     IPRPCRegistry, \
     PingRPC, \
     PingType, \
     IPRPCMessage, \
     IPRPCMessageType
-from ..exceptions import IPRPCException
+from pillar.exceptions import IPRPCMessageException
 
 
 class TestIPRPCRegistry(TestCase):
@@ -47,19 +47,19 @@ class TestIPRPCCall(TestCase):
     def test_catch_invalid_type(self):
         class TestRPCCall(IPRPCCall):
             attributes = {"test": str}
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             TestRPCCall(test=1)
 
     def test_catch_invalid_arg(self):
         class TestRPCCall(IPRPCCall):
             attributes = {"test": str}
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             TestRPCCall(test="Hello", fakearg=True)
 
     def test_catch_missing_arg(self):
         class TestRPCCall(IPRPCCall):
             attributes = {"test": str}
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             TestRPCCall()
 
     def test_rpc_json_serialization(self):
@@ -127,7 +127,7 @@ class TestIPRPCMessage(TestCase):
 class TestIPRPCMessageValidation(TestCase):
 
     def test_iprpc_message_invalid_broadcast_and_dst_peer(self):
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             call_instance = PingRPC(ping_type=PingType.REQUEST)
             IPRPCMessage(
                 IPRPCMessageType.INLINE,
@@ -138,7 +138,7 @@ class TestIPRPCMessageValidation(TestCase):
 
     def test_iprpc_message_invalid_inline_with_cid(self):
         call_instance = PingRPC(ping_type=PingType.REQUEST)
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.INLINE,
                 dst_peer="<peer_id>",
@@ -148,7 +148,7 @@ class TestIPRPCMessageValidation(TestCase):
 
     def test_iprpc_message_invalid_cid_with_inline(self):
         call_instance = PingRPC(ping_type=PingType.REQUEST)
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.CID,
                 dst_peer="<peer_id>",
@@ -157,21 +157,21 @@ class TestIPRPCMessageValidation(TestCase):
             )
 
     def test_iprpc_message_invalid_cid_missing_arg(self):
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.CID,
                 dst_peer="<peer_id>",
             )
 
     def test_iprpc_message_invalid_inline_missing_arg(self):
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.INLINE,
                 dst_peer="<peer_id>",
             )
 
     def test_iprpc_message_invalid_broadcast_with_peer(self):
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.CID,
                 dst_peer="<peer_id>",
@@ -180,7 +180,7 @@ class TestIPRPCMessageValidation(TestCase):
             )
 
     def test_iprpc_message_invalid_broadcast_false_without_peer(self):
-        with self.assertRaises(IPRPCException):
+        with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.CID,
                 broadcast=False,

@@ -1,2 +1,2 @@
-class IPRPCException(Exception):
+class IPRPCMessageException(Exception):
     pass
