@@ -151,6 +151,7 @@ class IPRPCMessage:
 class PingRequestCall(IPRPCCall):
     attributes = {"dst_peer": str}
 
+
 @IPRPCRegistry.register_rpc_call
 class PingReplyCall(IPRPCCall):
     attributes = {"dst_peer": str}
