@@ -21,7 +21,7 @@ class TestChannel(TestCase):
     def test_except_on_invalid_message_deserialized(self):
         bad_serialized_message = '{"msg_type": 1, "broadcast": ' \
                                  'true, "call":' \
-                                  ' {"message_type": "PingRPC", ' \
+                                  ' {"message_type": "PingRequestCall", ' \
                                  '"ping_type": 1}' \
                                   ', "dst_peer": "<peer_id>"}'
         channel_instance = Channel('test', MagicMock())

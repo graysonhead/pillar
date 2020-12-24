@@ -63,7 +63,10 @@ class IPRPCRegistry:
     def deserialize_from_dict(cls, serialized_call: dict):
         class_name = serialized_call.get('message_type')
         target_class = cls.message_types.get(class_name)
-        return target_class(**serialized_call)
+        try:
+            return target_class(**serialized_call)
+        except TypeError:
+            raise IPRPCMessageException(f"Invalid RPC Call {class_name}")
 
 
 class IPRPCMessageType:
@@ -144,11 +147,10 @@ class IPRPCMessage:
         return IPRPCMessage(**message_dict)
 
 
-class PingType:
-    REQUEST = 1
-    RESPONSE = 2
-
+@IPRPCRegistry.register_rpc_call
+class PingRequestCall(IPRPCCall):
+    attributes = {"dst_peer": str}
 
 @IPRPCRegistry.register_rpc_call
-class PingRPC(IPRPCCall):
-    attributes = {"ping_type": int}
+class PingReplyCall(IPRPCCall):
+    attributes = {"dst_peer": str}
