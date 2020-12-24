@@ -18,28 +18,42 @@ class Channel:
         """send message in pubsub channel"""
         serialized_message = message.serialize_to_json()
         self.logger.info(f"Sending message: {serialized_message}")
-        message_bytes = base64.b64encode(serialized_message.encode())
+        message_bytes = self._encode_message(serialized_message)
         async with self.ipfs as cli:
             await cli.pubsub.pub(self.queue_id,
                                  message_bytes.decode())
 
+    @staticmethod
+    def _encode_message(message: str):
+        return base64.b64encode(message.encode('utf-8'))
+
+    def _decode_message(self, message: bytes):
+        try:
+            return base64.b64decode(message.decode('utf-8')).decode()
+        except Exception as e:
+            self.logger.warning(f"Invalid encoding on received message: {e}")
+
+    def _validate_message(self, raw_message: str):
+        try:
+            return IPRPCMessage.deserialize_from_json(
+                raw_message)
+        except IPRPCMessageException as e:
+            self.logger.warning(f"Invalid message received: {e}")
+            return False
+
     async def get_messages(self):
         """gets messages from pubsub channel"""
-        messages = []
         async with self.ipfs as cli:
             async for raw_message in cli.pubsub.sub(self.queue_id):
-                raw_message_string = raw_message.get('data').decode('utf-8')
-                serialized_data = base64.b64decode(raw_message_string).decode()
-                try:
-                    message = IPRPCMessage.deserialize_from_json(
+                serialized_data = \
+                    self._decode_message(raw_message.get('data'))
+                message = self._validate_message(
                         serialized_data)
-                except IPRPCMessageException as e:
-                    self.logger.warning(f"Invalid message received: {e}")
-                messages.append(message)
-                self.logger.info(f"Received message from peer "
-                                 f"{raw_message.get('from').decode()}"
-                                 f": {message}")
-            self.messages = messages
+                if message:
+                    self.messages.append(message)
+                    self.logger.info(f"Received message from peer "
+                                     f"{raw_message.get('from').decode()}"
+                                     f": {message}")
 
     def __repr__(self):
         return f"<Channel: queue_id={self.queue_id}>"
