@@ -45,6 +45,21 @@ class IPRPCCall:
             return_dict.update({attr: getattr(self, attr)})
         return return_dict
 
+    def __repr__(self):
+        return_string = f"<{self.__class__.__name__}"
+        if self.attributes.__len__() >= 1:
+            last_attr = list(self.attributes.keys())[-1]
+            return_string = return_string + ": "
+            for attr in self.attributes.keys():
+                return_string = return_string + f"{attr}={getattr(self, attr)}"
+                if attr == last_attr:
+                    return_string = return_string + ">"
+                else:
+                    return_string = return_string + ", "
+        else:
+            return_string = return_string + ">"
+        return return_string
+
 
 class IPRPCRegistry:
     message_types = {}
@@ -81,6 +96,7 @@ class IPRPCMessage:
     def __init__(self,
                  msg_type: IPRPCMessageType,
                  dst_peer: str = '',
+                 src_peer: str = '',
                  broadcast: bool = False,
                  msg_cid: str = '',
                  call: IPRPCCall = None
@@ -89,11 +105,15 @@ class IPRPCMessage:
         self.msg_type = msg_type
         self.broadcast = broadcast
         self.dst_peer = dst_peer or None
+        self.src_peer = src_peer
         self.msg_cid = msg_cid or None
         self.call = call or None
         self._validate()
 
     def _validate(self):
+        if not self.src_peer:
+            raise IPRPCMessageException("Invalid message, "
+                                        "missing src_peer arg")
         if self.broadcast and self.dst_peer:
             raise IPRPCMessageException("Invalid message, "
                                         "cannot have broadcast arg "
@@ -127,7 +147,8 @@ class IPRPCMessage:
     def _dumps_inline_unencrypted(self):
         result_dict = {'msg_type': self.msg_type,
                        'broadcast': self.broadcast,
-                       'call': self.call.serialize_to_dict()}
+                       'call': self.call.serialize_to_dict(),
+                       'src_peer': self.src_peer}
         if self.msg_cid:
             result_dict.update({"msg_cid": self.msg_cid})
         if self.broadcast:
@@ -138,20 +159,26 @@ class IPRPCMessage:
 
     @staticmethod
     def deserialize_from_json(json_string: str):
-        pass
         message_dict = json.loads(json_string)
-        if message_dict.get("call", None):
+        if message_dict.get("call"):
             call_instance = \
                 IPRPCRegistry.deserialize_from_dict(message_dict.get('call'))
             message_dict.update({'call': call_instance})
         return IPRPCMessage(**message_dict)
 
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: " \
+            f"dst_peer={self.dst_peer}, " \
+            f"broadcast={self.broadcast}, " \
+            f"msg_type={self.msg_type}," \
+            f"Call={self.call}>"
+
 
 @IPRPCRegistry.register_rpc_call
 class PingRequestCall(IPRPCCall):
-    attributes = {"dst_peer": str}
+    attributes = {}
 
 
 @IPRPCRegistry.register_rpc_call
 class PingReplyCall(IPRPCCall):
-    attributes = {"dst_peer": str}
+    attributes = {}

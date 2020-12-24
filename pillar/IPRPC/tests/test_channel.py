@@ -7,13 +7,13 @@ class TestChannel(TestCase):
 
     def test_channel_creation(self):
         ipfs_client = MagicMock()
-        chan = Channel('test', ipfs_client)
+        chan = Channel('test', 'own_peer_id', ipfs_client)
         self.assertEqual('test', chan.queue_id)
 
     def test_encode_decode(self):
         test_string = "encodeAndDecodeMe!"
         ipfs_client = MagicMock()
-        chan = Channel('test', ipfs_client)
+        chan = Channel('test', 'own_peer_id', ipfs_client)
         encoded_string = chan._encode_message(test_string)
         decoded_string = chan._decode_message(encoded_string)
         self.assertEqual(test_string, decoded_string)
@@ -24,7 +24,7 @@ class TestChannel(TestCase):
                                   ' {"message_type": "PingRequestCall", ' \
                                  '"ping_type": 1}' \
                                   ', "dst_peer": "<peer_id>"}'
-        channel_instance = Channel('test', MagicMock())
+        channel_instance = Channel('test', 'own_peer_id', MagicMock())
         result = channel_instance._validate_message(
             bad_serialized_message
         )

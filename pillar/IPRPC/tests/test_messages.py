@@ -73,18 +73,19 @@ class TestIPRPCCall(TestCase):
 class TestPingRequestCall(TestCase):
 
     def test_create_ping_call(self):
-        ping_instance = PingRequestCall(dst_peer='test')
+        ping_instance = PingRequestCall()
         self.assertEqual(PingRequestCall, type(ping_instance))
 
 
 class TestIPRPCMessage(TestCase):
 
     def test_iprpc_message_inline_broadcast(self):
-        call_instance = PingRequestCall(dst_peer='test')
+        call_instance = PingRequestCall()
         message = IPRPCMessage(
             IPRPCMessageType.INLINE,
             broadcast=True,
             call=call_instance,
+            src_peer="src_peer"
         )
         self.assertEqual(1, message.msg_type)
         self.assertEqual(True, message.broadcast)
@@ -94,30 +95,31 @@ class TestIPRPCMessage(TestCase):
         message = IPRPCMessage(
             IPRPCMessageType.CID,
             broadcast=True,
-            msg_cid="<msg_cid>"
+            msg_cid="<msg_cid>",
+            src_peer="src_peer"
         )
         self.assertEqual(IPRPCMessageType.CID, message.msg_type)
         self.assertEqual(True, message.broadcast)
 
     def test_iprpc_message_inline_unencrypted_serialize(self):
-        call_instance = PingRequestCall(dst_peer='test')
+        call_instance = PingRequestCall()
         message = IPRPCMessage(
             IPRPCMessageType.INLINE,
             call=call_instance,
             dst_peer="<peer_id>",
+            src_peer="src_peer"
         )
         raw_message = message.serialize_to_json()
-        expected_result = '{"msg_type": 1, "broadcast": false, "call": ' \
-                          '{"message_type": "PingRequestCall", ' \
-                          '"dst_peer": "test"}' \
-                          ', "dst_peer": "<peer_id>"}'
+        expected_result = '{"msg_type": 1, "broadcast": false, ' \
+                          '"call": {"message_type": "PingRequestCall"}, ' \
+                          '"src_peer": "src_peer", "dst_peer": "<peer_id>"}'
         self.assertEqual(expected_result, raw_message)
 
     def test_iprpc_message_inline_encrypted_deserialize(self):
         json_string = '{"msg_type": 1, "broadcast": false, "call": ' \
-                      '{"message_type": "PingRequestCall", ' \
-                      '"dst_peer": "test"},' \
-                      ' "dst_peer": "<peer_id>"}'
+                      '{"message_type": "PingRequestCall" },' \
+                      ' "dst_peer": "<peer_id>",' \
+                      '"src_peer": "src_peer_id"}'
         message = IPRPCMessage.deserialize_from_json(json_string)
         self.assertEqual(IPRPCMessageType.INLINE, message.msg_type)
         self.assertEqual(False, message.broadcast)
@@ -129,7 +131,7 @@ class TestIPRPCMessageValidation(TestCase):
 
     def test_iprpc_message_invalid_broadcast_and_dst_peer(self):
         with self.assertRaises(IPRPCMessageException):
-            call_instance = PingRequestCall(dst_peer='test')
+            call_instance = PingRequestCall()
             IPRPCMessage(
                 IPRPCMessageType.INLINE,
                 dst_peer="<peer_id>",
@@ -137,8 +139,18 @@ class TestIPRPCMessageValidation(TestCase):
                 call=call_instance
             )
 
+    def test_iprpc_message_missing_src_peer(self):
+        with self.assertRaises(IPRPCMessageException):
+            call_instance = PingRequestCall()
+            IPRPCMessage(
+                IPRPCMessageType.INLINE,
+                dst_peer="<peer_id>",
+                broadcast=False,
+                call=call_instance
+            )
+
     def test_iprpc_message_invalid_inline_with_cid(self):
-        call_instance = PingRequestCall(dst_peer='test')
+        call_instance = PingRequestCall()
         with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.INLINE,
@@ -148,7 +160,7 @@ class TestIPRPCMessageValidation(TestCase):
             )
 
     def test_iprpc_message_invalid_cid_with_inline(self):
-        call_instance = PingRequestCall(dst_peer='test')
+        call_instance = PingRequestCall()
         with self.assertRaises(IPRPCMessageException):
             IPRPCMessage(
                 IPRPCMessageType.CID,
