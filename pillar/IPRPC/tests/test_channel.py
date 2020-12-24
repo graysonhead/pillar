@@ -1,6 +1,7 @@
 from unittest import TestCase
 from ..channel import Channel
 from unittest.mock import MagicMock
+from binascii import Error as BinASCIIError
 
 
 class TestChannel(TestCase):
@@ -29,3 +30,11 @@ class TestChannel(TestCase):
             bad_serialized_message
         )
         self.assertEqual(False, result)
+
+    def test_invalid_base64_encoding(self):
+        bad_base64 = b'b%27eyJtc2dfdHlwZSI6IDEsICJicm9hZGNhc3QiOiB0cnVlLCA' \
+                     b'iY2FsbCI6IHsibWVzc2FnZV90eXBlIjogIlBpbmdSUEMiLCAicGl' \
+                     b'uZ190eXBlIjogMX19%27'
+        channel_instance = Channel('test', 'own_peer_id', MagicMock())
+        with self.assertRaises(BinASCIIError):
+            channel_instance._decode_message(bad_base64)
