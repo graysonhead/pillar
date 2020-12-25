@@ -15,16 +15,6 @@ class AsyncMock(MagicMock):
         return super().__call__(*args, **kwargs)
 
 
-def async_test(coro):
-    def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(coro(*args, **kwargs))
-        finally:
-            loop.close()
-    return wrapper
-
-
 class TestChannel(TestCase):
 
     def test_channel_creation(self):
