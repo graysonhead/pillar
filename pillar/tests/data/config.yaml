@@ -1,0 +1,8 @@
+configdir: .testuser
+default_key_length: 4096
+default_key_type: RSA
+gpghome: .testuser
+ipfs_url: http://127.0.0.1:8080
+ipfsdir: .testuser/ipfs
+pubkey_path: .testuser/key.pub
+user_cid: null
