@@ -33,15 +33,11 @@ class TestChannelSendMessage2(TestCase):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
             self.channel.send_message(self.test_message))
-        try:
-            self.channel.ipfs.pubsub.pub.assert_called_with(
-                'this is incorrect')
-        except AssertionError as e:
-            msg, = e.args
-            self.assertEqual(msg.startswith(
-                "expected call not found."), True)
+        self.assertRaises(AssertionError,
+                          self.channel.ipfs.pubsub.pub.assert_called_with,
+                          ('this is incorrect',))
 
-    @patch('aioipfs.api.PubSubAPI.pub', new_callable=AsyncMock)
+    @ patch('aioipfs.api.PubSubAPI.pub', new_callable=AsyncMock)
     def test_send_message_expected_result(self, *args):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(
