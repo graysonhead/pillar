@@ -33,9 +33,9 @@ class TestChannel(TestCase):
     def test_except_on_invalid_message_deserialized(self):
         bad_serialized_message = '{"msg_type": 1, "broadcast": ' \
                                  'true, "call":' \
-                                  ' {"message_type": "PingRequestCall", ' \
+            ' {"message_type": "PingRequestCall", ' \
                                  '"ping_type": 1}' \
-                                  ', "dst_peer": "<peer_id>"}'
+            ', "dst_peer": "<peer_id>"}'
         channel_instance = Channel('test', 'own_peer_id', MagicMock())
         result = channel_instance._validate_message(
             bad_serialized_message
@@ -70,3 +70,4 @@ class TestChannelSendMessage(TestCase):
                                'ZXJfaWQifQ=='
         ipfs_instance.pubsub.pub.assert_called_with('test',
                                                     expected_data_result)
+        loop.run_until_complete(ipfs_instance.close())
