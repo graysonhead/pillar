@@ -1,7 +1,28 @@
 from unittest import TestCase
 from ..channel import Channel
+from ..messages import IPRPCMessage, PingRequestCall, IPRPCMessageType
 from unittest.mock import MagicMock
 from binascii import Error as BinASCIIError
+import aioipfs
+import asyncio
+import logging
+
+logging.basicConfig(level=logging.ERROR)
+
+
+class AsyncMock(MagicMock):
+    async def __call__(self, *args, **kwargs):
+        return super().__call__(*args, **kwargs)
+
+
+def async_test(coro):
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro(*args, **kwargs))
+        finally:
+            loop.close()
+    return wrapper
 
 
 class TestChannel(TestCase):
@@ -38,3 +59,24 @@ class TestChannel(TestCase):
         channel_instance = Channel('test', 'own_peer_id', MagicMock())
         with self.assertRaises(BinASCIIError):
             channel_instance._decode_message(bad_base64)
+
+
+class TestChannelSendMessage(TestCase):
+
+    def test_send_message(self):
+        ipfs_instance = aioipfs.AsyncIPFS()
+        ipfs_instance.pubsub = AsyncMock()
+        channel = Channel('test', 'own_peer_id', ipfs_instance)
+        test_message = IPRPCMessage(IPRPCMessageType.INLINE,
+                                    src_peer='own_peer_id',
+                                    dst_peer='other_peer_id',
+                                    call=PingRequestCall())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(channel.send_message(test_message))
+        expected_data_result = 'eyJtc2dfdHlwZSI6IDEsICJicm9hZGNhc3QiOiBmYWx' \
+                               'zZSwgImNhbGwiOiB7Im1lc3NhZ2VfdHlwZSI6ICJQaW' \
+                               '5nUmVxdWVzdENhbGwifSwgInNyY19wZWVyIjogIm93b' \
+                               'l9wZWVyX2lkIiwgImRzdF9wZWVyIjogIm90aGVyX3Bl' \
+                               'ZXJfaWQifQ=='
+        ipfs_instance.pubsub.pub.assert_called_with('test',
+                                                    expected_data_result)
