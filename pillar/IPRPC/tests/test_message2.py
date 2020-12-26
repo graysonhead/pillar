@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, SkipTest
 from unittest.mock import MagicMock, patch
 from ..channel import Channel
 from ..messages import IPRPCMessage, IPRPCMessageType, PingRequestCall
@@ -11,6 +11,9 @@ class AsyncMock(MagicMock):
         return super().__call__(*args, **kwargs)
 
 
+# "This is another example of how to do aio tests, but it is disabled"
+#           "as it spams the logs"
+@SkipTest
 class TestChannelSendMessage2(TestCase):
 
     def setUp(self):

@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, skipIf
 import os
 from ..config import Config
 from ..user import MyUser
@@ -7,6 +7,7 @@ import aioipfs
 from unittest.mock import patch, MagicMock
 import asyncio
 import shutil
+import platform
 
 
 class TestMyUser(TestCase):
@@ -45,6 +46,8 @@ class TestMyUser(TestCase):
         self.user.create_pubkey_cid.assert_called()
         self.user._parse_cid.assert_called()
 
+    @skipIf(int(platform.python_version_tuple()[1]) < 8,
+            "This test doesn't work on 3.7 and 3.6 due to some bug")
     @patch('gnupg.GPG.gen_key', new_callable=MagicMock)
     def test_generate_keypair(self, *args):
         self.user.generate_keypair(
