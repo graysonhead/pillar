@@ -48,8 +48,7 @@ class Config:
                         pass
 
     def save(self, path=None):
-        if path is None:
-            path = self.path
+        path = path or self.path
         with open(path, 'w+') as f:
             f.write(yaml.dump(self.get_attrib_dict()))
 
