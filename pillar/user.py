@@ -2,7 +2,6 @@ import os
 from enum import Enum
 import aioipfs
 from gnupg import GPG
-from .config import Config
 from pillar.IPRPC.messages import IPRPCCall
 from pillar.config import Config
 
