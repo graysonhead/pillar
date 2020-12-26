@@ -27,3 +27,14 @@ class TestConfig(TestCase):
             for attrib in Config.option_attribs:
                 self.assertEqual(data[attrib],
                                  getattr(self.config, attrib))
+
+    def test_no_config_get_attrib_dict(self):
+        emptyfile = os.path.join(os.getcwd(), 'empty.yaml')
+        with open(emptyfile, 'a+'):
+            pass
+        localconfig = Config(path=emptyfile)
+        dict = localconfig.get_attrib_dict()
+        print(dict)
+        for attrib in Config.option_attribs:
+            self.assertEqual(getattr(Config, attrib),
+                             dict[attrib])

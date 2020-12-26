@@ -39,16 +39,17 @@ class Config:
 
         with open(self.path, 'r') as config_file:
             self.file_content = yaml.load(config_file, Loader=yaml.FullLoader)
-            if self.file_content is not None:
-                for option_name in self.option_attribs:
-                    try:
-                        self.__setattr__(option_name,
-                                         self.file_content[option_name])
-                    except KeyError:
-                        pass
+            for option_name in self.option_attribs:
+                try:
+                    self.__setattr__(option_name,
+                                     self.file_content[option_name])
+                except TypeError:
+                    self.__setattr__(option_name,
+                                     getattr(Config, option_name))
 
     def save(self, path=None):
-        path = path or self.path
+        if path is None:
+            path = self.path
         with open(path, 'w+') as f:
             f.write(yaml.dump(self.get_attrib_dict()))
 
