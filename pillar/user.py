@@ -115,6 +115,6 @@ class MyUser(User):
         """Encrypt a payload for insertion in a message"""
         return self.gpg.encrypt(call.serialize_to_json, peer.fingerprint)
 
-    def trust(self, peer: PeerUser, trustlevel: TrustLevel):
+    def trust(self, peer: PeerUser, trustlevel: TrustLevel = TrustLevel.TRUST_FULLY):
         """Set the trust level for the given peer user's key"""
         self.gpg.trust_keys([peer.fingerprint], trustlevel)
