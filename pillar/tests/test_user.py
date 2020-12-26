@@ -7,7 +7,6 @@ import aioipfs
 from unittest.mock import patch, MagicMock
 import asyncio
 import shutil
-from pillar.IPRPC.messages import PingRequestCall
 
 
 class TestMyUser(TestCase):
@@ -53,17 +52,13 @@ class TestMyUser(TestCase):
         self.user.gpg.gen_key.assert_called()
         self.assertEqual(os.path.isfile(self.user.config.pubkey_path), True)
 
-#    @patch('aioipfs.api.CoreAPI.add', new_callable=AsyncMock)
+    @patch('aioipfs.api.CoreAPI.add_str', new_callable=AsyncMock)
     def test_create_pubkey_cid(self, *args):
-        # TODO: how to mock ipfs add? I get:
-        #
-        # TypeError: 'async for' requires an object with
-        # __aiter__ method, got coroutine
         with open(self.user.config.pubkey_path, 'a+') as f:
             f.write('')
 
         self.loop.run_until_complete(self.user.create_pubkey_cid())
-        # self.user.ipfs.add.assert_called()
+        self.user.ipfs.core.add_str.assert_called()
         self.assertEqual(self.user.pubkey_cid is not None, True)
 
     @patch('gnupg.GPG.encrypt', new_callable=MagicMock)

@@ -108,13 +108,17 @@ class MyUser(User):
 
     async def create_pubkey_cid(self):
         """Add the user's public key to ipfs"""
-        async for result in self.ipfs.add(self.config.pubkey_path):
-            self.config.user_cid = self.pubkey_cid = result['Hash']
+        with open(self.config.pubkey_path) as f:
+            key_str = f.read()
+        cid = await self.ipfs.core.add_str(key_str)
+        self.config.user_cid = cid
+        self.pubkey_cid = cid
 
     def encrypt_call(self, call: IPRPCCall, peer: PeerUser):
         """Encrypt a payload for insertion in a message"""
         return self.gpg.encrypt(call.serialize_to_json, peer.fingerprint)
 
-    def trust(self, peer: PeerUser, trustlevel: TrustLevel = TrustLevel.TRUST_FULLY):
+    def trust(self, peer: PeerUser,
+              trustlevel: TrustLevel = TrustLevel.TRUST_FULLY):
         """Set the trust level for the given peer user's key"""
         self.gpg.trust_keys([peer.fingerprint], trustlevel)
