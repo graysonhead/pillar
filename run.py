@@ -1,10 +1,8 @@
-from pprint import pprint
 from pillar.user import MyUser, PeerUser, TrustLevel
 from pillar.config import Config
 from pillar.IPRPC.channel import CallChannel
-from pillar.IPRPC.messages import IPRPCMessage, PingReplyCall, PingRequestCall
+from pillar.IPRPC.messages import PingReplyCall, PingRequestCall
 
-from gnupg import GPG
 import asyncio
 import aioipfs
 import os
@@ -54,8 +52,10 @@ config_b.ipfsdir = os.path.join(test_user_b_path, 'ipfs')
 ipfs_instance_a = aioipfs.AsyncIPFS()
 ipfs_instance_b = aioipfs.AsyncIPFS()
 
-# this is redundant in our case, but some configurations may have a separate gpghome and
-# configdir. This would be true, for example, if someone wanted to integrate the trust relationships
+# this is redundant in our case, but some configurations may have a separate
+# gpghome and
+# configdir. This would be true, for example, if someone wanted to integrate
+# the trust relationships
 # from pillar with the default gpg trust database at ~/.gpg
 # By default, pillar keeps its trust database separate from this.
 
@@ -63,26 +63,35 @@ os.makedirs(config_a.gpghome, exist_ok=True)
 os.makedirs(config_b.gpghome, exist_ok=True)
 
 
-# create our two users. A typical peer instace will have only one MyUser, but this is a test
-# so we're going to bootstrap two and have them echange their cids before sending encrypted
-# messages over ipfs pubsub. Generally, you'd exchange your cids through a messaging service
-# like signal or irc, but here, we're sharing an in-memory string between our test users. :)
+# create our two users. A typical peer instace will have only one MyUser, but
+# this is a test
+# so we're going to bootstrap two and have them echange their cids before
+# sending encrypted
+# messages over ipfs pubsub. Generally, you'd exchange your cids through a
+# messaging service
+# like signal or irc, but here, we're sharing an in-memory string between our
+# test users. :)
 
 user_a = MyUser(config_a, ipfs_instance_a)
 user_b = MyUser(config_b, ipfs_instance_b)
 
 loop = asyncio.get_event_loop()
-loop.run_until_complete(user_a.bootstrap(name_real="fakeuser_a",
-                                         name_comment="notreal",
-                                         name_email="fakeuser_a@pillarcloud.org",
-                                         passphrase=password))
+loop.run_until_complete(
+    user_a.bootstrap(name_real="fakeuser_a",
+                     name_comment="notreal",
+                     name_email="fakeuser_a@pillarcloud.org",
+                     passphrase=password)
+)
 
-loop.run_until_complete(user_b.bootstrap(name_real="fakeuser_b",
-                                         name_comment="notreal",
-                                         name_email="fakeuser_b@pillarcloud.org",
-                                         passphrase=password))
+loop.run_until_complete(
+    user_b.bootstrap(name_real="fakeuser_b",
+                     name_comment="notreal",
+                     name_email="fakeuser_b@pillarcloud.org",
+                     passphrase=password)
+)
 
-# now the users should save the config because they bootstrapped the user. This keeps
+# now the users should save the config because they bootstrapped the user.
+# This keeps
 # the cid for next time.
 
 user_a.config.save()
