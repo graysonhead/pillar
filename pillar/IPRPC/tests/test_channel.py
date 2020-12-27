@@ -3,7 +3,6 @@ from ..channel import CallChannel
 from unittest.mock import MagicMock
 import aioipfs
 import asyncio
-import logging
 
 
 class AsyncMock(MagicMock):
