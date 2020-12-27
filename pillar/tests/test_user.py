@@ -1,4 +1,4 @@
-from unittest import TestCase, skipIf
+from unittest import TestCase
 import os
 from ..config import Config
 from ..user import MyUser
@@ -7,7 +7,6 @@ import aioipfs
 from unittest.mock import patch, MagicMock
 import asyncio
 import shutil
-import platform
 
 
 class TestMyUser(TestCase):
@@ -34,7 +33,7 @@ class TestMyUser(TestCase):
         shutil.rmtree(self.user.config.configdir)
 
     @patch('pillar.user.MyUser.generate_keypair', new_callable=MagicMock)
-    @patch('pillar.user.MyUser.create_pubkey_cid', new_callable=AsyncMock)
+    @patch('pillar.user.MyUser.create_primary_pubkey_cid', new_callable=AsyncMock)
     @patch('pillar.user.MyUser._parse_cid', new_callable=AsyncMock)
     def test_bootstrap(self, *args):
         self.loop.run_until_complete(self.user.bootstrap(
@@ -43,26 +42,25 @@ class TestMyUser(TestCase):
             name_email=self.name_email))
         self.user.generate_keypair.assert_called_with(
             self.name_real, self.name_comment, self.name_email)
-        self.user.create_pubkey_cid.assert_called()
+        self.user.create_primary_pubkey_cid.assert_called()
         self.user._parse_cid.assert_called()
 
-    @skipIf(int(platform.python_version_tuple()[1]) < 8,
-            "This test doesn't work on 3.7 and 3.6 due to some bug")
     @patch('gnupg.GPG.gen_key', new_callable=MagicMock)
     def test_generate_keypair(self, *args):
+        self.user.fingerprint = 'string'
         self.user.generate_keypair(
             self.name_real, self.name_comment, self.name_email)
         self.user.gpg.gen_key.assert_called()
         self.assertEqual(os.path.isfile(self.user.config.pubkey_path), True)
 
     @patch('aioipfs.api.CoreAPI.add_str', new_callable=AsyncMock)
-    def test_create_pubkey_cid(self, *args):
+    def test_create_primary_pubkey_cid(self, *args):
         with open(self.user.config.pubkey_path, 'a+') as f:
             f.write('')
 
-        self.loop.run_until_complete(self.user.create_pubkey_cid())
+        self.loop.run_until_complete(self.user.create_primary_pubkey_cid())
         self.user.ipfs.core.add_str.assert_called()
-        self.assertEqual(self.user.pubkey_cid is not None, True)
+        self.assertEqual(self.user.primary_key_cid is not None, True)
 
     @patch('gnupg.GPG.encrypt', new_callable=MagicMock)
     def test_encrypt_call(self, *args, **kwargs):

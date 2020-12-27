@@ -87,7 +87,7 @@ class TestIPRPCMessage(TestCase):
             call=call_instance,
             src_peer="src_peer"
         )
-        self.assertEqual(1, message.msg_type)
+        self.assertEqual(IPRPCMessageType.INLINE, message.msg_type)
         self.assertEqual(True, message.broadcast)
         self.assertEqual(call_instance, message.call)
 

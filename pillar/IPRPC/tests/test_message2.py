@@ -17,9 +17,8 @@ class AsyncMock(MagicMock):
 class TestChannelSendMessage2(TestCase):
 
     def setUp(self):
-        ipfs_instance = aioipfs.AsyncIPFS()
-        ipfs_instance.pubsub = AsyncMock()
         self.loop = asyncio.get_event_loop()
+        ipfs_instance = aioipfs.AsyncIPFS()
         self.channel = Channel('test', 'own_peer_id', ipfs_instance)
         self.test_message = IPRPCMessage(IPRPCMessageType.INLINE,
                                          src_peer='own_peer_id',

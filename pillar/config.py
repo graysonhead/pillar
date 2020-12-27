@@ -12,9 +12,13 @@ class Config:
     configdir = os.path.expanduser("~")+'/.config/pillar/'
     ipfsdir = os.path.expanduser("~")+'/.config/pillar/ipfs/'
     pubkey_path = os.path.expanduser("~")+'/.config/pillar/key.pub'
-    default_key_type = "RSA"
+    default_key_type = "DSA"
     default_key_length = 4096
-    user_cid = None
+    default_subkey_type = "ELG-E"
+    default_subkey_length = 4096
+    default_subkey_duration = '0'
+    primary_key_cid = None
+    subkey_cid = None
     option_attribs = ["ipfs_url",
                       "gpghome",
                       "configdir",
@@ -22,7 +26,11 @@ class Config:
                       "pubkey_path",
                       "default_key_length",
                       "default_key_type",
-                      "user_cid"]
+                      "default_subkey_length",
+                      "default_subkey_type",
+                      "default_subkey_duration",
+                      "primary_key_cid",
+                      "subkey_cid"]
 
     def __init__(self, path=None):
         self.load_file(path=path)
@@ -44,6 +52,9 @@ class Config:
                     self.__setattr__(option_name,
                                      self.file_content[option_name])
                 except TypeError:
+                    self.__setattr__(option_name,
+                                     getattr(Config, option_name))
+                except KeyError:
                     self.__setattr__(option_name,
                                      getattr(Config, option_name))
 

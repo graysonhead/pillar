@@ -12,12 +12,18 @@ class TestConfig(TestCase):
             self.file_data = yaml.load(f, Loader=yaml.FullLoader)
 
         self.config = Config(path=self.path)
+        self.emptyfile = os.path.join(os.getcwd(), 'empty.yaml')
+        with open(self.emptyfile, 'a+'):
+            pass
 
     def test_load_file(self):
         self.assertEqual(os.path.isfile(self.path), True)
         for attrib in Config.option_attribs:
             self.assertEqual(self.file_data[attrib],
                              getattr(self.config, attrib))
+
+    def tearDown(self):
+        os.remove(self.emptyfile)
 
     def test_save(self):
         savefile = os.path.join(os.getcwd(), 'testconfig.yaml')
@@ -29,12 +35,17 @@ class TestConfig(TestCase):
                                  getattr(self.config, attrib))
 
     def test_no_config_get_attrib_dict(self):
-        emptyfile = os.path.join(os.getcwd(), 'empty.yaml')
-        with open(emptyfile, 'a+'):
-            pass
-        localconfig = Config(path=emptyfile)
+        localconfig = Config(path=self.emptyfile)
         dict = localconfig.get_attrib_dict()
-        print(dict)
         for attrib in Config.option_attribs:
             self.assertEqual(getattr(Config, attrib),
                              dict[attrib])
+
+    def test_no_config_save(self):
+        localconfig = Config(path=self.emptyfile)
+        localconfig.save()
+        with open(self.emptyfile, 'r') as f:
+            data = yaml.load(f, Loader=yaml.FullLoader)
+            for attrib in Config.option_attribs:
+                self.assertEqual(getattr(Config, attrib),
+                                 data[attrib])
