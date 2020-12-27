@@ -2,7 +2,7 @@ import os
 from enum import Enum
 import aioipfs
 from gnupg import GPG
-from pillar.IPRPC.messages import IPRPCCall
+from pillar.IPRPC.messages import IPRPCMessage
 from pillar.config import Config
 
 
@@ -151,7 +151,7 @@ class MyUser(User):
         self.primary_key_cid = cid['Hash']
         self.subkey_cid = cid['Hash']
 
-    def encrypt_call(self, call: IPRPCCall, peer: PeerUser):
+    def encrypt_call(self, call: IPRPCMessage, peer: PeerUser):
         """Encrypt a payload for insertion in a message"""
         return self.gpg.encrypt(call.serialize_to_json(), peer.fingerprint)
 
