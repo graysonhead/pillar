@@ -1,4 +1,5 @@
 import os
+import logging
 from enum import Enum
 import aioipfs
 from gnupg import GPG
@@ -25,9 +26,15 @@ class Identity:
     comment = None
     email = None
 
+    def __init__(self):
+        self.logger = logging.getLogger(self.__repr__())
+
 
 class Node(Identity):
-    pass
+    """A non-human peer"""
+
+    def __init__(self):
+        super().__init__()
 
 
 class User(Identity):
@@ -43,6 +50,7 @@ class User(Identity):
         # these are the same for now
         self.primary_key_cid = self.subkey_cid = cid or self.config.subkey_cid
         self.profile_cid = None
+        super().__init__()
 
     async def _parse_cid(self):
         """Parse the cid associated with this user"""
@@ -67,7 +75,7 @@ class User(Identity):
             await self.ipfs.get(cid, dstdir=keypath)
         with open(os.path.join(keypath, cid), 'r') as key:
             data = key.read()
-            import_result = self.gpg.import_keys(data)
+            self.gpg.import_keys(data)
 
 
 class PeerUser(User):
@@ -91,14 +99,16 @@ class MyUser(User):
                         cid=None,
                         name_real=None,
                         name_comment=None,
-                        name_email=None
+                        name_email=None,
+                        passphrase=None
                         ):
         if cid is not None:
             self.primary_key_cid = cid
         else:
             self.primary_key_cid = self.config.primary_key_cid
             if self.primary_key_cid is None:
-                self.generate_keypair(name_real, name_comment, name_email)
+                self.generate_keypair(
+                    name_real, name_comment, name_email, passphrase=passphrase)
                 await self.create_primary_pubkey_cid()
         await self._parse_cid()
 
@@ -106,11 +116,13 @@ class MyUser(User):
                          name_real,
                          name_comment,
                          name_email,
+                         passphrase=None,
                          key_type=None,
                          key_length=None,
                          subkey_type=None,
                          subkey_length=None,
-                         expire_date=None):
+                         expire_date=None,
+                         ):
         """Generate a new keypair and assign it to MyUser"""
         if key_type is None:
             key_type = self.config.default_key_type
@@ -131,12 +143,11 @@ class MyUser(User):
                                            name_real=name_real,
                                            name_comment=name_comment,
                                            name_email=name_email,
+                                           passphrase=passphrase
                                            )
-        from pprint import pprint
         key = self.gpg.gen_key(inputdata)
         self.fingerprint = key.fingerprint
         key_data = self.gpg.export_keys(self.fingerprint)
-        pprint(key_data)
 
         with open(self.config.pubkey_path, 'w+') as file:
             file.write(key_data)
@@ -151,16 +162,16 @@ class MyUser(User):
         self.primary_key_cid = cid['Hash']
         self.subkey_cid = cid['Hash']
 
-    def encrypt_call(self, call: IPRPCMessage, peer: PeerUser):
+    def encrypt_call(self, message: IPRPCMessage, peer: PeerUser,
+                     passphrase=None):
         """Encrypt a payload for insertion in a message"""
-        return self.gpg.encrypt(call.serialize_to_json(), peer.fingerprint)
+        return self.gpg.encrypt(message.serialize_to_json(), peer.fingerprint,
+                                passphrase=passphrase)
 
-    def decrypt_call(self, crypt_call, peercid):
-        peer = PeerUser(self.config, self.ipfs, peercid)
-        call_json = self.gpg.decrypt(crypt_call)
+    def decrypt_message(self, encrypted_message, passphrase=None):
+        return self.gpg.decrypt(encrypted_message, passphrase=passphrase)
 
     def trust(self, peer: PeerUser,
               trustlevel: TrustLevel = TrustLevel.TRUST_FULLY):
         """Set the trust level for the given peer user's key"""
-        print(peer.fingerprint)
-        self.gpg.trust_keys([peer.fingerprint], trustlevel)
+        return self.gpg.trust_keys(peer.fingerprint, trustlevel)

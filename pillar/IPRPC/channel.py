@@ -1,5 +1,6 @@
 import aioipfs
 import logging
+from urllib.parse import unquote
 
 
 class CallChannel:
@@ -22,6 +23,7 @@ class CallChannel:
             async for message in ipfs.pubsub.sub(self.queue_id):
                 self.logger.info(f"Got message on {self.__repr__()}: "
                                  f"{message}")
+                yield unquote(message['data'])
 
     def __repr__(self):
         return f"<CallChannel: queue_id={self.queue_id}>"

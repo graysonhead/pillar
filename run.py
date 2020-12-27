@@ -1,7 +1,7 @@
 from pprint import pprint
 from pillar.user import MyUser, PeerUser, TrustLevel
 from pillar.config import Config
-from pillar.IPRPC.channel import Channel
+from pillar.IPRPC.channel import CallChannel
 from pillar.IPRPC.messages import IPRPCMessage, PingReplyCall, PingRequestCall
 
 from gnupg import GPG
@@ -9,7 +9,10 @@ import asyncio
 import aioipfs
 import os
 import sys
+import time
+import logging
 
+password = "strong passwords make for secure accounts"
 
 # setup a config directory and file for our test users
 
@@ -69,11 +72,13 @@ user_b = MyUser(config_b, ipfs_instance_b)
 loop = asyncio.get_event_loop()
 loop.run_until_complete(user_a.bootstrap(name_real="fakeuser_a",
                                          name_comment="notreal",
-                                         name_email="fakeuser_a@pillarcloud.org"))
+                                         name_email="fakeuser_a@pillarcloud.org",
+                                         passphrase=password))
 
 loop.run_until_complete(user_b.bootstrap(name_real="fakeuser_b",
                                          name_comment="notreal",
-                                         name_email="fakeuser_b@pillarcloud.org"))
+                                         name_email="fakeuser_b@pillarcloud.org",
+                                         passphrase=password))
 
 # now the users should save the config because they bootstrapped the user. This keeps
 # the cid for next time.
@@ -81,53 +86,80 @@ loop.run_until_complete(user_b.bootstrap(name_real="fakeuser_b",
 user_a.config.save()
 user_b.config.save()
 
-pprint(user_a.gpg.list_keys())
 
-# We'll name our trasmission and receive channels from the perspective of user_a
-# to avoid confusion.
+# create call channels
 
-user_a_tx = Channel("rendezvous_channel1", user_a.subkey_cid, ipfs_instance_a)
-user_a_rx = Channel("rendezvous_channel2", user_a.subkey_cid, ipfs_instance_a)
+user_a_tx = CallChannel("new_rendezvous_channel1",
+                        ipfs_instance_a)
+user_a_rx = CallChannel("new_rendezvous_channel2",
+                        ipfs_instance_a)
 
-user_b_tx = Channel("rendezvous_channel2", user_b.subkey_cid, ipfs_instance_b)
-user_b_rx = Channel("rendezvous_channel1", user_b.subkey_cid, ipfs_instance_b)
+user_b_tx = CallChannel("new_rendezvous_channel2",
+                        ipfs_instance_b)
+user_b_rx = CallChannel("new_rendezvous_channel1",
+                        ipfs_instance_b)
 
-print(user_b.subkey_cid)
 peer_a = PeerUser(config_a, ipfs_instance_a, user_a.subkey_cid)
 peer_b = PeerUser(config_b, ipfs_instance_b, user_b.subkey_cid)
+
 loop.run_until_complete(peer_a._parse_cid())
 loop.run_until_complete(peer_b._parse_cid())
 
 os.makedirs(config_a.ipfsdir, exist_ok=True)
 os.makedirs(config_b.ipfsdir, exist_ok=True)
 
-print(peer_b.subkey_cid)
 loop.run_until_complete(user_a.import_key_from_cid(peer_b.subkey_cid))
-loop.run_until_complete(user_b.import_key_from_cid(peer_b.subkey_cid))
-user_a.trust(peer_b, TrustLevel.TRUST_FULLY.value)
-user_b.trust(peer_a, TrustLevel.TRUST_FULLY.value)
+loop.run_until_complete(user_b.import_key_from_cid(peer_a.subkey_cid))
+
+user_b.trust(peer_a, TrustLevel.TRUST_ULTIMATE.value)
+user_a.trust(peer_b, TrustLevel.TRUST_ULTIMATE.value)
+
+
+async def print_user_b_messages():
+    print("user B listening for messages")
+    async for message in user_b_rx.get_messages():
+        print("User B got a message:")
+        print(message)
+        print("Decrypted message:")
+        print(user_b.decrypt_message(message, passphrase=password))
+
+loop.create_task(print_user_b_messages())
 
 user_a_ping_request = PingRequestCall()
 user_a_encrypted_call = user_a.encrypt_call(user_a_ping_request, peer_b)
-user_a_message = IPRPCMessage(
-    2, peer_b.subkey_cid, peer_a.subkey_cid, call=user_a_encrypted_call)
-loop.run_until_complete(user_a_tx.send_message(user_a_message))
 
-loop.run_until_complete(user_b_rx.get_messages())
-for message in user_b_rx.messages:
-    print("User B got a message:")
-    print(message)
+
+async def print_user_a_messages():
+    print("User A Lisening for messages.")
+    async for message in user_a_rx.get_messages():
+        print("User A got a message:")
+        print(message)
+        print("Decrypted message:")
+        print(user_a.decrypt_message(message, passphrase=password))
+
+
+loop.create_task(print_user_a_messages())
 
 user_b_ping_reply = PingReplyCall()
 user_b_encrypted_call = user_b.encrypt_call(user_b_ping_reply, peer_a)
-user_b_message = IPRPCMessage(
-    2, peer_a.subkey_cid, peer_b.subkey_cid, call=user_b_encrypted_call)
-loop.run_until_complete(user_b_tx.send_message(user_b_message))
 
-loop.run_until_complete(user_b_rx.get_messages())
-for message in user_a_rx.messages:
-    print("User A got a message:")
-    print(message)
+
+async def delay_send_request():
+    time.sleep(1)
+    print("Request sent.")
+    await user_a_tx.send_message(user_a_encrypted_call)
+
+asyncio.ensure_future(delay_send_request())
+
+
+async def delay_send_response():
+    time.sleep(1)
+    print("Reply sent.")
+    await user_b_tx.send_message(user_b_encrypted_call)
+
+asyncio.ensure_future(delay_send_response())
+
+loop.run_forever()
 
 loop.run_until_complete(ipfs_instance_a.close())
 loop.run_until_complete(ipfs_instance_b.close())

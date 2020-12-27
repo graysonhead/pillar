@@ -44,7 +44,8 @@ class TestMyUser(TestCase):
             name_comment=self.name_comment,
             name_email=self.name_email))
         self.user.generate_keypair.assert_called_with(
-            self.name_real, self.name_comment, self.name_email)
+            self.name_real, self.name_comment,
+            self.name_email, passphrase=None)
         self.user.create_primary_pubkey_cid.assert_called()
         self.user._parse_cid.assert_called()
 

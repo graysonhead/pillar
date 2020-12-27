@@ -12,9 +12,9 @@ class Config:
     configdir = os.path.expanduser("~")+'/.config/pillar/'
     ipfsdir = os.path.expanduser("~")+'/.config/pillar/ipfs/'
     pubkey_path = os.path.expanduser("~")+'/.config/pillar/key.pub'
-    default_key_type = "DSA"
+    default_key_type = "RSA"
     default_key_length = 4096
-    default_subkey_type = "ELG-E"
+    default_subkey_type = "RSA"
     default_subkey_length = 4096
     default_subkey_duration = '0'
     primary_key_cid = None
