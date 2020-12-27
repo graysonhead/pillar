@@ -12,6 +12,8 @@ import sys
 import time
 import logging
 
+logging.basicConfig(level=logging.INFO)
+
 password = "strong passwords make for secure accounts"
 
 # setup a config directory and file for our test users

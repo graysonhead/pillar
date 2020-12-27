@@ -5,8 +5,6 @@ import aioipfs
 import asyncio
 import logging
 
-logging.basicConfig(level=logging.ERROR)
-
 
 class AsyncMock(MagicMock):
     async def __call__(self, *args, **kwargs):

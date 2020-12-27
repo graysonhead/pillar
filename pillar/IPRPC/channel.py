@@ -16,14 +16,14 @@ class CallChannel:
         async with self.ipfs as ipfs:
             await ipfs.pubsub.pub(self.queue_id,
                                   message)
-            self.logger.info(f"Sent message on {self.__repr__()}: {message}")
+            self.logger.info(f"Sent message: {message}")
 
     async def get_messages(self):
         async with self.ipfs as ipfs:
             async for message in ipfs.pubsub.sub(self.queue_id):
-                self.logger.info(f"Got message on {self.__repr__()}: "
+                self.logger.info(f"Got message: "
                                  f"{message}")
-                yield unquote(message['data'])
+                yield unquote(message['data'].decode('utf-8'))
 
     def __repr__(self):
         return f"<CallChannel: queue_id={self.queue_id}>"
