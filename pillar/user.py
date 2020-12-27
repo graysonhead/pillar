@@ -158,11 +158,9 @@ class MyUser(User):
     def decrypt_call(self, crypt_call, peercid):
         peer = PeerUser(self.config, self.ipfs, peercid)
         call_json = self.gpg.decrypt(crypt_call)
-        return IPRPCCall(
-
 
     def trust(self, peer: PeerUser,
-              trustlevel: TrustLevel=TrustLevel.TRUST_FULLY):
+              trustlevel: TrustLevel = TrustLevel.TRUST_FULLY):
         """Set the trust level for the given peer user's key"""
         print(peer.fingerprint)
         self.gpg.trust_keys([peer.fingerprint], trustlevel)
