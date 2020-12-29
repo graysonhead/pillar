@@ -50,32 +50,36 @@ class User(Identity):
         # these are the same for now
         self.primary_key_cid = self.subkey_cid = cid or self.config.subkey_cid
         self.profile_cid = None
+        self.primary_key_file = None
         super().__init__()
 
-    async def _parse_cid(self):
-        """Parse the cid associated with this user"""
-        # todo: we need a central place to manage where we write ipfs
-        # content to disk.
-        if not os.path.isfile(self.config.pubkey_path):
-            await self.ipfs.get(self.primary_key_cid,
-                                dstdir=os.path.join(self.config.ipfsdir,
-                                                    self.subkey_cid))
-        with open(self.config.pubkey_path, 'r') as keyfile:
-            keydata = keyfile.read()
-            import_result = self.gpg.import_keys(keydata)
-            self.fingerprint = import_result.fingerprints[0]
-            self.key_props = self.gpg.list_keys().key_map[self.fingerprint]
-            self.name = self.key_props['uids']
+    async def load_primary_pubkey_data_from_ipfs(self):
+        await self.import_key_from_cid(self.primary_key_cid)
+        self.primary_key_file = os.path.join(self.config.ipfsdir,
+                                             self.primary_key_cid)
+        import_result = self.load_key_data_from_file(self.primary_key_file)
+        self.fingerprint = import_result.fingerprints[0]
+        self.key_props = self.gpg.list_keys().key_map[self.fingerprint]
+        self.name = self.key_props['uids']
+
+    def load_key_data_from_file(self, path):
+        """
+        Imports gpg key at given path into databse and returns output dict.
+        """
+        with open(path, 'r') as keyfile:
+            return self.gpg.import_keys(keyfile.read())
 
     async def import_key_from_cid(self, cid):
         """import a key to gpg database identified by the given cid"""
         keypath = os.path.join(self.config.ipfsdir, cid)
         if not os.path.isdir(keypath):
             os.makedirs(keypath)
-            await self.ipfs.get(cid, dstdir=keypath)
-        with open(os.path.join(keypath, cid), 'r') as key:
-            data = key.read()
-            self.gpg.import_keys(data)
+        await self.ipfs.get(cid, dstdir=keypath)
+        self.import_key_from_file(os.path.join(keypath, cid))
+
+    def import_key_from_file(self, keyfile):
+        with open(os.path.join(keyfile), 'r') as key:
+            self.gpg.import_keys(key.read())
 
 
 class PeerUser(User):
@@ -96,21 +100,19 @@ class MyUser(User):
         super().__init__(config, ipfs_instance, cid)
 
     async def bootstrap(self,
-                        cid=None,
                         name_real=None,
                         name_comment=None,
                         name_email=None,
                         passphrase=None
                         ):
-        if cid is not None:
-            self.primary_key_cid = cid
-        else:
-            self.primary_key_cid = self.config.primary_key_cid
-            if self.primary_key_cid is None:
-                self.generate_keypair(
-                    name_real, name_comment, name_email, passphrase=passphrase)
-                await self.create_primary_pubkey_cid()
-        await self._parse_cid()
+        if self.is_safe_to_bootstrap():
+            self.generate_keypair(
+                name_real, name_comment, name_email, passphrase=passphrase)
+            await self.create_primary_pubkey_cid()
+            await self.load_primary_pubkey_data_from_ipfs()
+
+    def is_safe_to_bootstrap(self):
+        return self.config.primary_key_cid is None
 
     def generate_keypair(self,
                          name_real,

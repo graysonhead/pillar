@@ -37,7 +37,8 @@ class TestMyUser(TestCase):
     @patch('pillar.user.MyUser.generate_keypair', new_callable=MagicMock)
     @patch('pillar.user.MyUser.create_primary_pubkey_cid',
            new_callable=AsyncMock)
-    @patch('pillar.user.MyUser._parse_cid', new_callable=AsyncMock)
+    @patch('pillar.user.MyUser.load_primary_pubkey_data_from_ipfs',
+           new_callable=AsyncMock)
     def test_bootstrap(self, *args):
         self.loop.run_until_complete(self.user.bootstrap(
             name_real=self.name_real,
@@ -47,7 +48,7 @@ class TestMyUser(TestCase):
             self.name_real, self.name_comment,
             self.name_email, passphrase=None)
         self.user.create_primary_pubkey_cid.assert_called()
-        self.user._parse_cid.assert_called()
+        self.user.load_primary_pubkey_data_from_ipfs.assert_called()
 
     @skipIf(int(platform.python_version_tuple()[1]) < 8,
             "This test doesn't work on 3.7 and 3.6 due to some bug")
@@ -86,3 +87,20 @@ class TestMyUser(TestCase):
         message = MagicMock()
         self.user.decrypt_message(message)
         self.user.gpg.decrypt.assert_called()
+
+    @patch('gnupg.GPG.import_keys', new_callable=MagicMock)
+    def import_key_from_file(self, *args, **kwargs):
+        f = MagicMock
+        self.user.import_key_from_file(f)
+        self.user.gpg.import_keys.assert_called()
+
+    @patch('gnupg.GPG.list_keys', new_callable=MagicMock)
+    @patch('pillar.user.User.load_key_data_from_file',
+           new_callable=MagicMock)
+    @patch('pillar.user.User.import_key_from_cid', new_callable=AsyncMock)
+    def test_load_primary_pubkey_data_from_ipfs(self, *args, **kwargs):
+        self.user.primary_key_cid = "bogon"
+        self.loop.run_until_complete(
+            self.user.load_primary_pubkey_data_from_ipfs())
+        self.user.load_key_data_from_file.assert_called()
+        self.user.import_key_from_cid.assert_called()
