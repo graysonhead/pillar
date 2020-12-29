@@ -80,3 +80,9 @@ class TestMyUser(TestCase):
         peer = MagicMock()
         self.user.trust(peer)
         self.user.gpg.trust_keys.assert_called()
+
+    @patch('gnupg.GPG.decrypt', new_callable=MagicMock)
+    def test_decrypt_message(self, *args, **kwargs):
+        message = MagicMock()
+        self.user.decrypt_message(message)
+        self.user.gpg.decrypt.assert_called()
