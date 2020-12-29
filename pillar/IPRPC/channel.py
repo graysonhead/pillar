@@ -2,15 +2,9 @@ import aioipfs
 import asyncio
 import logging
 from urllib.parse import unquote
-from queue import Queue
-from threading import Thread
-
-_term = object()
-
-
-def start_loop(loop):
-    asyncio.set_event_loop(loop)
-    loop.run_forever()
+# from queue import Queue
+# from threading import Thread
+from multiprocessing import Process, Pipe
 
 
 class CallChannel:
@@ -28,20 +22,15 @@ class CallChannel:
                                   message)
             self.logger.info(f"Sent message: {message}")
 
-    async def send_messages_from_queue(self, queue: Queue):
-        while True:
-            message = queue.get()
-            if message == _term:
-                break
-            else:
-                await self.send_message(message)
+    async def send_message_from_pipe(self, pipe: Pipe):
+        message = pipe.recv()
+        await self.send_message(message)
 
-    async def retrieve_messages_to_queue(self, queue: Queue):
-        while True:
-            async with self.ipfs as ipfs:
-                async for message in ipfs.pubsub.sub(self.queue_id):
-                    self.logger.info(f"Got message: {message}")
-                    queue.put(unquote(message['data'].decode('utf-8')))
+    async def retrieve_messages_to_pipe(self, pipe: Pipe):
+        async with self.ipfs as ipfs:
+            async for message in ipfs.pubsub.sub(self.queue_id):
+                self.logger.info(f"Got message: {message}")
+                pipe.send(unquote(message['data'].decode('utf-8')))
 
     async def get_messages(self):
         async with self.ipfs as ipfs:
@@ -65,41 +54,52 @@ class PeerChannel:
         self.tx_queue_id = tx_queue_id
         self.logger = logging.getLogger(self.__repr__())
         # Set up Transmit Thread
-        self.tx_queue = Queue()
+        self.tx_pipe, tx_thread_pipe = Pipe()
         tx_loop = asyncio.new_event_loop()
-        self.tx_thread = Thread(target=self._create_tx_callchannel,
-                                args=(tx_loop, )
-                                )
+        self.tx_thread = Process(target=self._create_tx_callchannel,
+                                 args=(tx_loop, tx_thread_pipe))
+        self.tx_thread.start()
         self.logger.info(f"Spawned tx_thread {self.tx_thread}")
         # Set up receive thread
-        self.rx_queue = Queue()
+        self.rx_pipe, rx_thread_pipe = Pipe()
         rx_loop = asyncio.new_event_loop()
-        self.rx_thread = Thread(target=self._create_rx_callchannel,
-                                args=(rx_loop, ))
+        self.rx_thread = Process(target=self._create_rx_callchannel,
+                                 args=(rx_loop, rx_thread_pipe))
+        self.rx_thread.start()
         self.logger.info(f"Spawned rx_thread {self.tx_thread}")
 
-    def start_threads(self):
-        self.tx_thread.start()
-        self.rx_thread.start()
-
-    def _create_rx_callchannel(self, loop):
+    def _create_rx_callchannel(self, loop, rx_thread_pipe):
         asyncio.set_event_loop(loop)
         ipfs_instance = aioipfs.AsyncIPFS()
         channel = CallChannel(self.rx_queue_id, ipfs_instance)
-        loop.run_until_complete(
-            channel.retrieve_messages_to_queue(self.rx_queue)
-        )
+        while True:
+            loop.run_until_complete(
+                channel.retrieve_messages_to_pipe(rx_thread_pipe))
 
-    def _create_tx_callchannel(self, loop):
+    def _create_tx_callchannel(self, loop, pipe: Pipe):
         asyncio.set_event_loop(loop)
         ipfs_instance = aioipfs.AsyncIPFS()
         channel = CallChannel(self.tx_queue_id, ipfs_instance)
-        loop.run_until_complete(
-            channel.send_messages_from_queue(self.tx_queue)
-        )
+        while True:
+            loop.run_until_complete(channel.send_message_from_pipe(pipe))
 
     def _stop_threads(self):
-        self.rx_queue.put(_term)
+        self.tx_pipe.close()
+        self.rx_pipe.close()
+        self.rx_thread.terminate()
+        self.rx_thread.join()
+        self.tx_thread.terminate()
+        self.tx_thread.join()
+
+    def send_message(self, message: str):
+        self.tx_pipe.send(message)
+
+    def receive_message(self):
+        return self.rx_pipe.recv()
+
+    def __del__(self):
+        # Viciously Murder children on garbage collection
+        self._stop_threads()
 
     def __repr__(self):
         return f"<PeerChannel: {self.peer_id}>"
