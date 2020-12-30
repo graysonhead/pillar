@@ -99,8 +99,8 @@ class PeerChannel:
                                      f"peer {self.our_id}")
                     break
             if time.time() > timeout:
-                self.logger.error(f"Failed to establish connection with peer, "
-                                  f"timout exceeded.")
+                self.logger.error("Failed to establish connection with peer, "
+                                  "timout exceeded.")
                 self._change_peering_status(PeeringStatus.IDLE)
                 break
             time.sleep(5)
