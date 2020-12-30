@@ -102,3 +102,8 @@ class PeeringHello(IPRPCMessage):
 @IPRPCRegistry.register_rpc_call
 class PeeringHelloResponse(IPRPCMessage):
     attributes = {"responder_id": str}
+
+
+@IPRPCRegistry.register_rpc_call
+class PeeringKeepalive(IPRPCMessage):
+    attributes = {}

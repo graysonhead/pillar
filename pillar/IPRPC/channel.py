@@ -3,7 +3,11 @@ import asyncio
 import logging
 from enum import Enum
 from urllib.parse import unquote
-from .messages import IPRPCMessage, PeeringHello, IPRPCRegistry
+from .messages import IPRPCMessage, \
+    PeeringHello, \
+    PeeringHelloResponse, \
+    IPRPCRegistry, \
+    PeeringKeepalive
 # from queue import Queue
 # from threading import Thread
 from multiprocessing import Process, Pipe
@@ -58,10 +62,14 @@ class PeerChannel:
     def __init__(self,
                  peer_id: str,
                  rx_queue_id: str,
-                 tx_queue_id: str):
+                 tx_queue_id: str,
+                 keepalive_interval: int = 10,
+                 keepalive_timeout: int = 20):
         self.our_id = peer_id
         self.peer_id = None
         self.ready = False
+        self.keepalive_interval = keepalive_interval
+        self.keepalive_timeout = keepalive_timeout
         self.rx_queue_id = rx_queue_id
         self.tx_queue_id = tx_queue_id
         self.logger = logging.getLogger(self.__repr__())
@@ -91,19 +99,44 @@ class PeerChannel:
             self.send_call(PeeringHello(initiator_id=self.our_id))
             if self.rx_pipe.poll(1):
                 rx_call = self.receive_call()
-                if type(rx_call) == PeeringHello:
-                    self._change_peering_status(PeeringStatus.ESTABLISHED)
+                if type(rx_call) == PeeringHelloResponse:
                     self.ready = True
-                    self.peer_id = rx_call.initiator_id
-                    self.logger.info(f"Established connection with "
-                                     f"peer {self.our_id}")
-                    break
+                    self._change_peering_status(PeeringStatus.ESTABLISHED)
+                    self.peer_id == rx_call.responder_id
+                    self.logger.info("Channel established, "
+                                     "processing messages")
+                    self.process_messages()
+                elif type(rx_call) == PeeringHello:
+                    self.send_call(
+                        PeeringHelloResponse(responder_id=self.our_id))
+                    self.ready = True
+                    self._change_peering_status(PeeringStatus.ESTABLISHED)
+                    self.peer_id == rx_call.initiator_id
+                    self.logger.info("Channel established,"
+                                     "processing messages")
+                    self.process_messages()
             if time.time() > timeout:
                 self.logger.error("Failed to establish connection with peer, "
                                   "timout exceeded.")
                 self._change_peering_status(PeeringStatus.IDLE)
                 break
             time.sleep(5)
+
+    def process_messages(self):
+        timeout = time.time() + self.keepalive_timeout
+        keepalive = time.time() + self.keepalive_interval
+        while True:
+            if time.time() > timeout:
+                self._change_peering_status(PeeringStatus.IDLE)
+                self.establish_connection()
+            if time.time() > keepalive:
+                self.send_call(PeeringKeepalive())
+                keepalive = time.time() + self.keepalive_interval
+            if self.rx_pipe.poll(1):
+                rx_call = self.receive_call()
+                if type(rx_call) == PeeringKeepalive:
+                    self.logger.info("Got keepalive message, renewing timeout")
+                    timeout = time.time() + self.keepalive_timeout
 
     def _change_peering_status(self, new_status: PeeringStatus):
         self.logger.info(f"Peering status change from {self.status} to "
