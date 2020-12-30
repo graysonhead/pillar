@@ -88,7 +88,6 @@ class PeerChannel:
         self.rx_thread.start()
         self.logger.info(f"Spawned rx_thread {self.tx_thread}")
         self.status = PeeringStatus.IDLE
-        # self.establish_connection()
 
     def establish_connection(self, timeout=30):
         self.logger.info("Attempting to establish contact with remote peer")
@@ -105,7 +104,7 @@ class PeerChannel:
                     self.peer_id == rx_call.responder_id
                     self.logger.info("Channel established, "
                                      "processing messages")
-                    self.process_messages()
+                    break
                 elif type(rx_call) == PeeringHello:
                     self.send_call(
                         PeeringHelloResponse(responder_id=self.our_id))
@@ -114,7 +113,7 @@ class PeerChannel:
                     self.peer_id == rx_call.initiator_id
                     self.logger.info("Channel established,"
                                      "processing messages")
-                    self.process_messages()
+                    break
             if time.time() > timeout:
                 self.logger.error("Failed to establish connection with peer, "
                                   "timout exceeded.")
@@ -122,21 +121,28 @@ class PeerChannel:
                 break
             time.sleep(5)
 
+    def idle_connection(self):
+        self._change_peering_status(PeeringStatus.IDLE)
+        self.ready = False
+
     def process_messages(self):
         timeout = time.time() + self.keepalive_timeout
         keepalive = time.time() + self.keepalive_interval
         while True:
-            if time.time() > timeout:
-                self._change_peering_status(PeeringStatus.IDLE)
+            if not self.ready:
                 self.establish_connection()
-            if time.time() > keepalive:
-                self.send_call(PeeringKeepalive())
-                keepalive = time.time() + self.keepalive_interval
-            if self.rx_pipe.poll(1):
-                rx_call = self.receive_call()
-                if type(rx_call) == PeeringKeepalive:
-                    self.logger.info("Got keepalive message, renewing timeout")
-                    timeout = time.time() + self.keepalive_timeout
+            else:
+                if time.time() > timeout:
+                    self.idle_connection()
+                if time.time() > keepalive:
+                    self.send_call(PeeringKeepalive())
+                    keepalive = time.time() + self.keepalive_interval
+                if self.rx_pipe.poll(1):
+                    rx_call = self.receive_call()
+                    if type(rx_call) == PeeringKeepalive:
+                        self.logger.info("Got keepalive message, "
+                                         "renewing timeout")
+                        timeout = time.time() + self.keepalive_timeout
 
     def _change_peering_status(self, new_status: PeeringStatus):
         self.logger.info(f"Peering status change from {self.status} to "
