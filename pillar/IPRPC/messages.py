@@ -92,3 +92,13 @@ class PingRequestCall(IPRPCMessage):
 @IPRPCRegistry.register_rpc_call
 class PingReplyCall(IPRPCMessage):
     attributes = {}
+
+
+@IPRPCRegistry.register_rpc_call
+class PeeringHello(IPRPCMessage):
+    attributes = {"initiator_id": str}
+
+
+@IPRPCRegistry.register_rpc_call
+class PeeringHelloResponse(IPRPCMessage):
+    attributes = {"responder_id": str}

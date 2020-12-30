@@ -69,10 +69,10 @@ class TestCallChannel(TestCase):
 class TestPeerChannel(TestCase):
 
     def test_peerchannel_creation(self):
-        peer_id = 'peer_id'
+        peer_id = 'our_id'
         tx_queue_id = 'tx_queue_id'
         rx_queue_id = 'rx_queue_id'
         pc = PeerChannel(peer_id, rx_queue_id, tx_queue_id)
-        self.assertEqual(peer_id, pc.peer_id)
+        self.assertEqual(peer_id, pc.our_id)
         self.assertEqual(tx_queue_id, pc.tx_queue_id)
         self.assertEqual(rx_queue_id, pc.rx_queue_id)
