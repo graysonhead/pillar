@@ -2,10 +2,7 @@ from ..channel import IPRPCChannel, PeeringStatus
 from ..messages import PeeringHello
 import asynctest
 import aioipfs
-import logging
 import time
-
-logging.basicConfig(level=logging.INFO)
 
 
 def generate_fake_pubsub_message(src_peer: str,
