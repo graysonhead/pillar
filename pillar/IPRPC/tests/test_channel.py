@@ -39,6 +39,78 @@ class TestIPRPCChannel(TestCase):
         self.channel.ipfs.pubsub.pub.assert_called_with('testing_queue',
                                                         test_string)
 
+    def test_receive_message(self):
+
+        async def return_message_string(self):
+            list = [
+                PeeringHello(initiator_id='test_peer')
+            ]
+            for i in list:
+                data = i.serialize_to_json()
+                yield {'from': 'fake_peer'.encode('utf-8'),
+                       'data': data.encode('utf-8')}
+        self.channel.ipfs.pubsub.sub = return_message_string
+
+        async def get_messages():
+            messages = []
+            async for message in self.channel._get_from_ipfs():
+                messages.append(message)
+            return messages
+
+        loop = asyncio.get_event_loop()
+        messages = loop.run_until_complete(get_messages())
+        expected = ['{"message_type": "PeeringHello", '
+                    '"initiator_id": "test_peer"}']
+        self.assertEqual(expected, messages)
+
+    def test_recieve_call(self):
+        call = PeeringHello(initiator_id='test_peer')
+
+        async def return_message_string(self):
+            list = [
+                call
+            ]
+            for i in list:
+                data = i.serialize_to_json()
+                yield {'from': 'fake_peer'.encode('utf-8'),
+                       'data': data.encode('utf-8')}
+
+        async def get_calls():
+            calls = []
+            async for message in self.channel._get_message():
+                calls.append(message)
+            return calls
+
+        self.channel.ipfs.pubsub.sub = return_message_string
+        loop = asyncio.get_event_loop()
+        deserialized_results = loop.run_until_complete(get_calls())
+        expected_results = [call.serialize_to_json()]
+        serialized_results = list(map(lambda i: i.serialize_to_json(),
+                                  deserialized_results))
+        self.assertEqual(expected_results, serialized_results)
+
+    def test_log_recieve_bad_call(self):
+        async def return_message_string(self):
+            list = [
+                '{"this": is, "bad"; "json}'
+            ]
+            for i in list:
+                yield {'from': 'fake_peer'.encode('utf-8'),
+                       'data': i.encode('utf-8')}
+
+        async def get_calls():
+            calls = []
+            async for message in self.channel._get_message():
+                calls.append(message)
+            return calls
+
+        self.channel.ipfs.pubsub.sub = return_message_string
+        loop = asyncio.get_event_loop()
+
+        with self.assertLogs(level='WARNING') as log:
+            loop.run_until_complete(get_calls())
+            self.assertEqual(1, len(log.records))
+
     def test_channel_repr(self):
         repr_string = self.channel.__repr__()
         expected = '<IPRPCChannel:queue_id=testing_queue,peer_id=None,' \

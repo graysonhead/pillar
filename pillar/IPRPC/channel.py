@@ -112,13 +112,12 @@ class IPRPCChannel(Process):
         if not self.our_ipfs_peer_id:
             await self._set_our_ipfs_peer_id()
             self.logger.info(f"Set our peer id to {self.our_ipfs_peer_id}")
-        else:
-            async with self.ipfs as ipfs:
-                async for message in ipfs.pubsub.sub(self.queue_id):
-                    if not message['from'].decode() == self.our_ipfs_peer_id:
-                        raw_message = unquote(message['data'].decode('utf-8'))
-                        self.logger.info(f"Got raw message: {message}")
-                        yield raw_message
+        async with self.ipfs as ipfs:
+            async for message in ipfs.pubsub.sub(self.queue_id):
+                if not message['from'].decode() == self.our_ipfs_peer_id:
+                    raw_message = unquote(message['data'].decode('utf-8'))
+                    self.logger.info(f"Got raw message: {message}")
+                    yield raw_message
 
     async def _get_message(self):
         async for message in self._get_from_ipfs():
