@@ -37,14 +37,22 @@ class IPRPCChannel(Process):
         self.keepalive_send_interval = keepalive_send_interval
         self.keepalive_timeout_interval = keepalive_timeout_interval
         self.timeout = None
+        self.keepalive_send_timeout = None
         super().__init__()
         self.logger = logging.getLogger(f"<IPRPCChannel:{self.queue_id}>")
 
     def run(self) -> None:
-        asyncio.ensure_future(self._handle_establish_connection())
-        asyncio.ensure_future(self._handle_incoming_messages())
-        asyncio.ensure_future(self._handle_keepalive())
-        asyncio.ensure_future(self._handle_timeout())
+        self.timeout = time.time() + self.keepalive_timeout_interval
+        self.keepalive_send_timeout = time.time() + \
+            self.keepalive_send_interval
+        asyncio.ensure_future(self._handler_loop(
+            self._handle_establish_connection, sleep=5))
+        asyncio.ensure_future(
+            self._handler_loop(self._handle_incoming_messages))
+        asyncio.ensure_future(self._handler_loop(self._handle_keepalive,
+                                                 sleep=5))
+        asyncio.ensure_future(self._handler_loop(self._handle_timeout,
+                                                 sleep=5))
         loop = asyncio.get_event_loop()
         loop.run_forever()
 
@@ -54,45 +62,41 @@ class IPRPCChannel(Process):
         self.status = new_status
 
     async def _handle_establish_connection(self):
+        if not self.status == PeeringStatus.ESTABLISHED:
+            self._change_peering_status(PeeringStatus.ESTABLISHING)
+            await self._send_message(PeeringHello(initiator_id=self.id))
+
+    async def _handler_loop(self, handler, sleep=0):
         while True:
-            if not self.status == PeeringStatus.ESTABLISHED:
-                self._change_peering_status(PeeringStatus.ESTABLISHING)
-                await self._send_message(PeeringHello(initiator_id=self.id))
-            await asyncio.sleep(5)
+            await handler()
+            await asyncio.sleep(sleep)
 
     async def _handle_timeout(self):
-        while True:
-            if time.time() > self.timeout:
-                if not self.status == PeeringStatus.ESTABLISHING:
-                    self._change_peering_status(PeeringStatus.IDLE)
-            await asyncio.sleep(5)
+        if time.time() > self.timeout:
+            if not self.status == PeeringStatus.ESTABLISHING:
+                self._change_peering_status(PeeringStatus.IDLE)
 
     async def _handle_incoming_messages(self):
-        self.timeout = time.time() + self.keepalive_timeout_interval
-        while True:
-            async for rx_message in self._get_message():
-                if type(rx_message) is PeeringHello:
-                    await self._send_message(
-                        PeeringHelloResponse(responder_id=self.id)
-                    )
-                elif type(rx_message) is PeeringHelloResponse:
-                    self.peer_id = rx_message.responder_id
-                    self._change_peering_status(PeeringStatus.ESTABLISHED)
-                elif type(rx_message) is PeeringKeepalive:
-                    self.timeout = time.time() + \
-                                   self.keepalive_timeout_interval
-                else:
-                    self.logger.info(f"Would have sent {rx_message} to queue")
+        async for rx_message in self._get_message():
+            if type(rx_message) is PeeringHello:
+                await self._send_message(
+                    PeeringHelloResponse(responder_id=self.id)
+                )
+            elif type(rx_message) is PeeringHelloResponse:
+                self.peer_id = rx_message.responder_id
+                self._change_peering_status(PeeringStatus.ESTABLISHED)
+            elif type(rx_message) is PeeringKeepalive:
+                self.timeout = time.time() + \
+                               self.keepalive_timeout_interval
+            else:
+                self.logger.info(f"Would have sent {rx_message} to queue")
 
     async def _handle_keepalive(self):
-        keepalive_send_timeout = time.time() + self.keepalive_send_interval
-        while True:
-            if self.status == PeeringStatus.ESTABLISHED:
-                if time.time() > keepalive_send_timeout:
-                    await self._send_message(PeeringKeepalive())
-                    keepalive_send_timeout = time.time() + \
-                        self.keepalive_send_interval
-            await asyncio.sleep(5)
+        if self.status == PeeringStatus.ESTABLISHED:
+            if time.time() > self.keepalive_send_timeout:
+                await self._send_message(PeeringKeepalive())
+                self.keepalive_send_timeout = time.time() + \
+                    self.keepalive_send_interval
 
     async def _set_our_ipfs_peer_id(self) -> None:
         """This sets self.our_ipfs_peer_id so we can ignore messages we sent"""
@@ -112,12 +116,11 @@ class IPRPCChannel(Process):
         if not self.our_ipfs_peer_id:
             await self._set_our_ipfs_peer_id()
             self.logger.info(f"Set our peer id to {self.our_ipfs_peer_id}")
-        async with self.ipfs as ipfs:
-            async for message in ipfs.pubsub.sub(self.queue_id):
-                if not message['from'].decode() == self.our_ipfs_peer_id:
-                    raw_message = unquote(message['data'].decode('utf-8'))
-                    self.logger.info(f"Got raw message: {message}")
-                    yield raw_message
+        async for message in self.ipfs.pubsub.sub(self.queue_id):
+            if not message['from'].decode() == self.our_ipfs_peer_id:
+                raw_message = unquote(message['data'].decode('utf-8'))
+                self.logger.info(f"Got raw message: {message}")
+                yield raw_message
 
     async def _get_message(self):
         async for message in self._get_from_ipfs():
