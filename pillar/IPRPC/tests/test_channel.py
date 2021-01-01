@@ -22,9 +22,6 @@ def generate_fake_pubsub_message(src_peer: str,
 class TestIPRPCChannel(asynctest.TestCase):
 
     def setUp(self) -> None:
-
-        async def return_id():
-            return {"ID": "this_peers_id"}
         ipfs_instance = aioipfs.AsyncIPFS()
         ipfs_instance.core.id = asynctest.CoroutineMock(return_value={
             "ID": "test_id"
