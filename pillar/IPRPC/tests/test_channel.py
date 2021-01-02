@@ -1,5 +1,11 @@
 from ..channel import IPRPCChannel, PeeringStatus
-from ..messages import PeeringHello
+from ..messages import PeeringHello, \
+    PeeringHelloResponse, \
+    IPRPCMessage, \
+    PeeringKeepalive
+from multiprocessing import Queue
+from multiprocessing.connection import Connection
+from queue import Empty
 import asynctest
 import aioipfs
 import time
@@ -16,6 +22,10 @@ def generate_fake_pubsub_message(src_peer: str,
     }
 
 
+class TestMessage(IPRPCMessage):
+    attributes = {}
+
+
 class TestIPRPCChannel(asynctest.TestCase):
 
     def setUp(self) -> None:
@@ -23,6 +33,7 @@ class TestIPRPCChannel(asynctest.TestCase):
         ipfs_instance.core.id = asynctest.CoroutineMock(return_value={
             "ID": "test_id"
         })
+        ipfs_instance.pubsub = asynctest.MagicMock()
         self.channel = IPRPCChannel('test_id',
                                     'testing_queue',
                                     ipfs_instance)
@@ -132,3 +143,125 @@ class TestIPRPCChannel(asynctest.TestCase):
         self.channel.status = PeeringStatus.ESTABLISHED
         await self.channel._handle_keepalive()
         self.channel._send_message.assert_awaited()
+
+    def test_recieve_message_from_thread(self):
+        message = TestMessage()
+        mock_queue = Queue()
+
+        async def mock_get_message():
+            yield mock_queue.get()
+
+        self.channel._get_message = mock_get_message
+        rx_output = self.channel.rx_output
+        self.channel.start()
+        mock_queue.put(message)
+        recieved_message = rx_output.recv()
+        self.assertEqual(message.serialize_to_json(),
+                         recieved_message.serialize_to_json())
+        self.channel.terminate()
+
+    def test_send_message_to_thread(self):
+        message = TestMessage()
+        mock_queue = Queue()
+
+        async def send_message(message: IPRPCMessage):
+            mock_queue.put(message)
+
+        self.channel._send_message = send_message
+        self.channel.status = PeeringStatus.ESTABLISHED
+        tx_input = self.channel.tx_input
+        self.channel.start()
+        tx_input.send(message)
+        test_message = mock_queue.get()
+        self.assertEqual(message.serialize_to_json(),
+                         test_message.serialize_to_json())
+        self.channel.terminate()
+
+    def test_dont_send_test_message_if_not_established(self):
+        message = TestMessage()
+        mock_queue = Queue()
+
+        async def send_message(message: IPRPCMessage):
+            mock_queue.put(message)
+
+        self.channel._send_message = send_message
+        tx_input = self.channel.tx_input
+        self.channel.start()
+        tx_input.send(message)
+        mock_queue.get()  # Hit the queue once to clear the PeeringHello
+        with self.assertRaises(Empty):
+            mock_queue.get(timeout=1)
+        self.channel.terminate()
+
+    def test_returns_pipe_endpoints(self):
+        tx, rx = self.channel.get_pipe_endpoints()
+        self.assertEqual(Connection, type(tx))
+        self.assertEqual(Connection, type(rx))
+
+    async def test_handler_loop(self):
+        self.channel.fake_method = asynctest.CoroutineMock()
+        await self.channel._handler_loop(self.channel.fake_method,
+                                         run_once=True)
+        self.channel.fake_method.assert_awaited()
+
+    async def test_handle_tx_queue_messages(self):
+        test_message = TestMessage()
+        self.channel.status = PeeringStatus.ESTABLISHED
+        self.channel._send_message = asynctest.CoroutineMock()
+        tx, rx = self.channel.get_pipe_endpoints()
+        tx.send(test_message)
+        await self.channel._handle_tx_queue_messages()
+        self.channel._send_message.assert_awaited()
+
+    async def test_respond_to_peeringhello(self):
+        test_peering_hello = PeeringHello(initiator_id='other_peer')
+        mock_queue = Queue()
+
+        async def send_message(message: IPRPCMessage):
+            mock_queue.put(message)
+
+        async def yield_peering_hello():
+            yield test_peering_hello
+
+        self.channel._get_message = yield_peering_hello
+        self.channel._send_message = send_message
+        await self.channel._handle_incoming_messages()
+        response = mock_queue.get()
+        self.assertEqual(PeeringHelloResponse, type(response))
+
+    async def test_recieve_peeringhello_response(self):
+        peering_hello_response = PeeringHelloResponse(
+            responder_id='other_peer'
+        )
+
+        async def yield_peering_hello_response():
+            yield peering_hello_response
+
+        self.channel._get_message = yield_peering_hello_response
+        await self.channel._handle_incoming_messages()
+        self.assertEqual(PeeringStatus.ESTABLISHED, self.channel.status)
+        self.assertEqual('other_peer', self.channel.peer_id)
+
+    async def test_receive_keepalive_sets_timeout(self):
+        keepalive = PeeringKeepalive()
+
+        async def yield_peering_keepalive():
+            yield keepalive
+
+        self.channel._get_message = yield_peering_keepalive
+        await self.channel._handle_incoming_messages()
+        self.assertNotEqual(None, self.channel.timeout)
+
+    async def test_sends_message_to_pipe(self):
+        test_message = TestMessage()
+
+        async def yield_test_message():
+            yield test_message
+
+        self.channel._get_message = yield_test_message
+        await self.channel._handle_incoming_messages()
+        tx, rx = self.channel.get_pipe_endpoints()
+        message = rx.recv()
+        self.assertEqual(test_message.serialize_to_json(),
+                         message.serialize_to_json()
+                         )
