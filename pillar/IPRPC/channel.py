@@ -89,7 +89,7 @@ class IPRPCChannel(Process):
                 self.timeout = time.time() + \
                                self.keepalive_timeout_interval
             else:
-                self.logger.info(f"Would have sent {rx_message} to queue")
+                self.rx_input.send(rx_message)
 
     async def _handle_keepalive(self):
         if self.status == PeeringStatus.ESTABLISHED:
