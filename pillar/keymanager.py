@@ -271,9 +271,9 @@ class KeyManager:
 
     def ensure_cid_content_present(self, cid: str):
         if not os.path.isfile(os.path.join(self.config.ipfsdir, cid)):
-            self.logger.info(f"Getting cid from ipfs: {self.cid}")
+            self.logger.info(f"Getting cid from ipfs: {cid}")
             self.loop.run_until_complete(self.ipfs.get(
-                self.cid, dstdir=self.config.ipfsdir))
+                cid, dstdir=self.config.ipfsdir))
 
     def get_cid_for_key_type(self, key_type: PillarKeyType):
         """gets the cid from the config for the given key type"""
