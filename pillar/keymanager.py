@@ -1,12 +1,11 @@
 import pgpy
-from pgpy.constants import PubKeyAlgorithm, SignatureType,\
+from pgpy.constants import PubKeyAlgorithm, \
     KeyFlags, HashAlgorithm, SymmetricKeyAlgorithm, CompressionAlgorithm
 from pgpy.types import Fingerprint
 from .config import Config
 import asyncio
 import aioipfs
 from enum import Enum
-from datetime import datetime
 import os
 import logging
 from pprint import pprint

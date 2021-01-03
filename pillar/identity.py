@@ -29,7 +29,10 @@ class PublicProfile:
 
 class Invitation:
     def __init__(
-            self, config: Config, profile: PublicProfile, listen_channels=None):
+            self,
+            config: Config,
+            profile: PublicProfile,
+            listen_channels=None):
         self.profile = profile
         if listen_channels is None:
             for _ in range(config.listen_channels_per_peer):
