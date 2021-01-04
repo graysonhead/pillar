@@ -4,13 +4,14 @@ from ..config import Config
 from ..user import MyUser
 from ..tests import AsyncMock
 import aioipfs
-from unittest import skipIf
+from unittest import skipIf, SkipTest
 from unittest.mock import patch, MagicMock
 import asyncio
 import shutil
 import platform
 
 
+@SkipTest
 class TestMyUser(TestCase):
     def setUp(self):
         """

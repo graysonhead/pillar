@@ -1,4 +1,3 @@
-import aioipfs
 import asyncio
 import logging
 from enum import Enum
@@ -8,6 +7,7 @@ from .messages import IPRPCMessage, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
     PeeringKeepalive
+from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 import time
 
@@ -23,13 +23,13 @@ class IPRPCChannel(Process):
     def __init__(self,
                  id: str,
                  ipfs_queue_id: str,
-                 aioipfs_instance: aioipfs.AsyncIPFS,
+                 ipfs_instance: IPFSClient = None,
                  keepalive_send_interval: int = 30,
                  keepalive_timeout_interval: int = 60):
         self.id = id
         self.queue_id = ipfs_queue_id
         self.peer_id = None
-        self.ipfs = aioipfs_instance
+        self.ipfs = ipfs_instance or IPFSClient()
         self.our_ipfs_peer_id = None
         self.tx_input, self.tx_output = Pipe()
         self.rx_input, self.rx_output = Pipe()
@@ -134,23 +134,22 @@ class IPRPCChannel(Process):
 
     async def _set_our_ipfs_peer_id(self) -> None:
         """This sets self.our_ipfs_peer_id so we can ignore messages we sent"""
-        id_info = await self.ipfs.core.id()
+        id_info = await self.ipfs.get_id()
         self.our_ipfs_peer_id = id_info.get('ID')
+        self.logger.info(f"Set our peer id to {self.our_ipfs_peer_id}")
 
     async def _send_message(self, call: IPRPCMessage):
         await self._send_ipfs(call.serialize_to_json())
         self.logger.info(f"Sent message: {call}")
 
     async def _send_ipfs(self, message: str) -> None:
-        async with self.ipfs as ipfs:
-            await ipfs.pubsub.pub(self.queue_id, message)
+        await self.ipfs.send_pubsub_message(self.queue_id, message)
         self.logger.info(f"Sent raw message: {message}")
 
     async def _get_from_ipfs(self):
         if not self.our_ipfs_peer_id:
             await self._set_our_ipfs_peer_id()
-            self.logger.info(f"Set our peer id to {self.our_ipfs_peer_id}")
-        async for message in self.ipfs.pubsub.sub(self.queue_id):
+        async for message in self.ipfs.get_pubsub_message(self.queue_id):
             if not message['from'].decode() == self.our_ipfs_peer_id:
                 raw_message = unquote(message['data'].decode('utf-8'))
                 self.logger.info(f"Got raw message: {message}")
@@ -162,13 +161,6 @@ class IPRPCChannel(Process):
                 yield IPRPCRegistry.deserialize_from_json(message)
             except Exception as e:
                 self.logger.warning(f"Decoding failed on message: {e}")
-
-    async def _close_aio_connection(self):
-        await self.ipfs.close()
-
-    def __del__(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._close_aio_connection())
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}:queue_id={self.queue_id}," \
