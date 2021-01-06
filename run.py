@@ -3,10 +3,22 @@ from pillar.config import Config
 from pillar.keymanager import KeyManager, EncryptionHelper, PeerUser
 from pillar.identity import User, Node
 from pillar.status import InstanceStatusManager
+from pprint import pprint
 import os
+import shutil
 import logging
 
 
+def remove_directories_idempotently():
+    dirs = ['.testusera', '.testuserb']
+    for dir in dirs:
+        try:
+            shutil.rmtree(dir)
+        except FileNotFoundError:
+            pass
+
+
+remove_directories_idempotently()
 logging.basicConfig(level=logging.INFO)
 
 
@@ -44,29 +56,36 @@ instance_a = ContrivedInstance(
 instance_b = ContrivedInstance(
     test_user_b_path, 'User B', 'userb@pillarcloud.org')
 
-peer_b_fingerprint = str(
-    instance_b.key_manager.user_subkey.fingerprint)
 
-peer_a_fingerprint = str(
-    instance_a.key_manager.user_subkey.fingerprint)
+for k, v in instance_b.key_manager.user_primary_key.subkeys.items():
+    print(k)
+    print(v.fingerprint)
+    peer_b_user_subkey_fingerprint = v.fingerprint
 
-instance_a.key_manager.import_peer_key(
-    instance_b.key_manager.latest_pubkey_cid)
-instance_b.key_manager.import_peer_key(
-    instance_a.key_manager.latest_pubkey_cid)
+    pprint(instance_b.key_manager.user_subkey)
+
+    peer_a_fingerprint = str(
+        instance_a.key_manager.user_subkey.pubkey.fingerprint)
+
+    instance_a.key_manager.import_peer_key(
+        instance_b.key_manager.latest_pubkey_cid)
+    instance_b.key_manager.import_peer_key(
+        instance_a.key_manager.latest_pubkey_cid)
+
+    encryption_helper_a = EncryptionHelper(instance_a.key_manager)
+    encryption_helper_b = EncryptionHelper(instance_b.key_manager)
+
+    user_a_message = "Pillar is the best cloud!"
+
+    crypt_message_a = encryption_helper_a.\
+        sign_and_encrypt_string_from_user_subkey_to_peer_fingerprint(
+            user_a_message,
+            peer_b_user_subkey_fingerprint)
+
+    decrypted_message = encryption_helper_b.decrypt_and_verify_pgp_to_user(
+        crypt_message_a)
+
+    print(decrypted_message)
 
 
-encryption_helper_a = EncryptionHelper(instance_a.key_manager)
-encryption_helper_b = EncryptionHelper(instance_b.key_manager)
-
-user_a_message = "Pillar is the best cloud!"
-
-crypt_message_a = encryption_helper_a.\
-    sign_and_encrypt_string_from_user_subkey_to_peer_fingerprint(
-        user_a_message,
-        peer_b_fingerprint)
-
-decrypted_message = encryption_helper_b.decrypt_and_verify_pgp_to_user(
-    crypt_message_a)
-
-print(decrypted_message)
+remove_directories_idempotently()

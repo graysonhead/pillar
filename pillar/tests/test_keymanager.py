@@ -1,23 +1,34 @@
+import shutil
+import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager
+from ..keymanager import KeyManager, KeyOptions
 from ..config import Config
 import os
 from unittest.mock import patch, MagicMock
-import pgpy
+from pgpy.constants import PubKeyAlgorithm
+
+
+def rmdir(dir):
+    try:
+        shutil.rmtree(dir)
+    except FileNotFoundError:
+        pass
 
 
 class mock_pgp_public_key(MagicMock):
     def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
         super().__call__()
-
-        configpath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                  'data/config.yaml')
-
-        config = Config(path=configpath)
-        config.configdir = './mockdir'
-        km = KeyManager(config)
-        km.generate_user_primary_key('Mock User', 'noreply@pillarcloud.org')
-        return km.user_primary_key
+        uid = pgpy.PGPUID.new(
+            'Mock User',
+            comment='none',
+            email='noreply@pillarcloud.org')
+        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+        key.add_uid(uid,
+                    usage=KeyOptions.usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
+        return key
 
 
 class TestKeyManager(TestCase):
@@ -38,3 +49,4 @@ class TestKeyManager(TestCase):
     def test_import_peer_key(self, *args):
         self.km.import_peer_key('notacid')
         self.km.get_key_by_cid.assert_called()
+        self.km.ensure_cid_content_present.assert_called()

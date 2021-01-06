@@ -8,7 +8,6 @@ import aioipfs
 from enum import Enum
 import os
 import logging
-from pprint import pprint
 
 
 class Peer:
@@ -177,9 +176,9 @@ class KeyManager:
 
     def key_already_in_keyring(self, identifier) -> bool:
         try:
-            self.logger.debug(f"checking for key in keyring: {identifier}")
+            self.logger.warn(f"checking for key in keyring: {identifier}")
             key = self.keyring._get_key(identifier)
-            self.logger.debug(f"Key found: {key.fingerprint}")
+            self.logger.warn(f"Key found: {key.fingerprint}")
             return True
         except KeyError:
             return False
@@ -384,15 +383,12 @@ class EncryptionHelper:
                                                       message: str,
                                                       local: pgpy.PGPKey,
                                                       remote_fingerprint: str):
-        print(self.key_manager.peer_subkey_map)
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
         parent_fingerprint = \
             self.key_manager.peer_subkey_map[remote_keyid]
         with self.key_manager.keyring.key(parent_fingerprint) as peer_key:
             peer_subkey = None
-            pprint(peer_key.__dict__)
-            pprint(peer_key._children.__class__)
             for _, key in peer_key._children.items():
                 if key.fingerprint == remote_fingerprint:
                     peer_subkey = key
