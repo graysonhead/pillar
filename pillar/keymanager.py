@@ -146,7 +146,7 @@ class KeyManager:
         Import a new key into the keyring
         """
         self.ensure_cid_content_present(cid)
-        peer_key, o = self.get_key_by_cid(cid)
+        peer_key = self.get_key_by_cid(cid)
 
         if self.key_already_in_keyring(peer_key.fingerprint):
             raise CannotImportSamePrimaryFingerprint
@@ -225,7 +225,8 @@ class KeyManager:
 
     def get_key_by_cid(self, cid: str) -> pgpy.PGPKey:
         self.ensure_cid_content_present(cid)
-        return pgpy.PGPKey.from_file(os.path.join(self.config.ipfsdir, cid))
+        key, o = pgpy.PGPKey.from_file(os.path.join(self.config.ipfsdir, cid))
+        return key
 
     def ensure_cid_content_present(self, cid: str):
         if not os.path.isfile(os.path.join(self.config.ipfsdir, cid)):
