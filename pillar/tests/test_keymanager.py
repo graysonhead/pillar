@@ -8,13 +8,6 @@ from unittest.mock import patch, MagicMock
 from pgpy.constants import PubKeyAlgorithm
 
 
-def rmdir(dir):
-    try:
-        shutil.rmtree(dir)
-    except FileNotFoundError:
-        pass
-
-
 class mock_pgp_public_key(MagicMock):
     def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
         super().__call__()
