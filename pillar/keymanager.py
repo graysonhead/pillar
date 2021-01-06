@@ -176,9 +176,9 @@ class KeyManager:
 
     def key_already_in_keyring(self, identifier) -> bool:
         try:
-            self.logger.warn(f"checking for key in keyring: {identifier}")
+            self.logger.debug(f"checking for key in keyring: {identifier}")
             key = self.keyring._get_key(identifier)
-            self.logger.warn(f"Key found: {key.fingerprint}")
+            self.logger.debug(f"Key found: {key.fingerprint}")
             return True
         except KeyError:
             return False
