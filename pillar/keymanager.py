@@ -102,53 +102,6 @@ class PillarPrivKey:
         self.key_type = key_type
 
 
-class PillarPubkey:
-    def __init__(self, loop: asyncio.unix_events._UnixSelectorEventLoop,
-                 config: Config, cid: str):
-        self.loop = loop
-        self.config = config
-        self.cid = cid
-        self.ipfs = aioipfs.AsyncIPFS()
-        self.key_path = os.path.join(self.config.ipfsdir, self.cid)
-        self.logger = logging.getLogger(f'[{self.__class__.__name__}:{cid}]')
-        self.logger.info("Loading key.")
-        self.ensure_cid_content_present()
-        self.key, self.others = pgpy.PGPKey().from_file(self.key_path)
-
-    def ensure_cid_content_present(self):
-        if not os.path.isfile(self.key_path):
-            self.logger.info(f"Getting cid from ipfs: {self.cid}")
-            self.loop.run_until_complete(self.ipfs.get(
-                self.cid, dstdir=self.config.ipfsdir))
-
-
-class PillarLocalPubKey(PillarPubkey):
-    def __init__(self, loop: asyncio.unix_events._UnixSelectorEventLoop,
-                 config: Config, key_type: PillarKeyType):
-        self.config = config
-        self.key_type = key_type
-        self.cid = self.get_cid()
-        if self.cid is None:
-            raise KeyTypeNotPresent
-        super().__init__(loop, self.config, self.cid)
-
-    def get_cid(self):
-        """gets the cid from the config for our key type"""
-        config_item_map = {
-            PillarKeyType.REGISTRATION_PRIMARY_KEY:
-                self.config.registration_primary_key_cid,
-            PillarKeyType.USER_PRIMARY_KEY: self.config.user_primary_key_cid,
-            PillarKeyType.USER_SUBKEY: self.config.user_subkey_cid,
-            PillarKeyType.NODE_SUBKEY: self.config.node_subkey_cid}
-        return config_item_map[self.key_type]
-
-
-class PeerKey(PillarPubkey):
-    def __init__(self, loop: asyncio.unix_events._UnixSelectorEventLoop,
-                 config: Config, cid: str):
-        super().__init__(loop, config, cid)
-
-
 class KeyOptions:
     usage = {KeyFlags.Certify,
              KeyFlags.Sign,
@@ -192,26 +145,27 @@ class KeyManager:
         """
         Import a new key into the keyring
         """
-        peer_key = PeerKey(self.loop, self.config, cid)
+        self.ensure_cid_content_present(cid)
+        peer_key, o = self.get_key_by_cid(cid)
 
-        pprint(peer_key.key.__dict__)
-
-        if self.key_already_in_keyring(peer_key.key.fingerprint):
+        if self.key_already_in_keyring(peer_key.fingerprint):
             raise CannotImportSamePrimaryFingerprint
         else:
             self.logger.info(
-                f"Importing new public key: {peer_key.key.fingerprint}")
-            self.keyring.load(peer_key.key)
-            for k in peer_key.key.subkeys:
+                f"Importing new public key: {peer_key.fingerprint}")
+            self.keyring.load(peer_key)
+            for k in peer_key.subkeys:
                 self.peer_subkey_map.update(
-                    {k: peer_key.key.fingerprint})
-            return peer_key.key.fingerprint
+                    {k: peer_key.fingerprint})
+            return peer_key.fingerprint
 
     def update_peer_key(self, cid):
         """
         update an existing key in the keyring
         """
-        new_key = PeerKey(cid)
+        new_key = self.get_key_by_cid(cid)
+        self.logger.info(
+            f"Importing peer key: {new_key.fingerprint}")
         if not self.key_already_in_keyring(new_key.fingerprint):
             raise KeyNotInKeyring
         if not self.this_key_is_newer(new_key):
@@ -223,9 +177,9 @@ class KeyManager:
 
     def key_already_in_keyring(self, identifier) -> bool:
         try:
-            self.logger.info(f"checking for key in keyring: {identifier}")
+            self.logger.debug(f"checking for key in keyring: {identifier}")
             key = self.keyring._get_key(identifier)
-            self.logger.info(f"Key found: {key.fingerprint}")
+            self.logger.debug(f"Key found: {key.fingerprint}")
             return True
         except KeyError:
             return False
@@ -244,7 +198,7 @@ class KeyManager:
 
     def load_keytype(self, key_type: PillarKeyType):
         try:
-            self.get_key_from_ipfs_by_type(key_type)
+            self.ensure_key_type_ipfs_content_present(key_type)
             return self.load_private_key_from_file(key_type)
         except KeyTypeNotPresent:
             return None
@@ -262,12 +216,16 @@ class KeyManager:
         else:
             return False
 
-    def get_key_from_ipfs_by_type(self, key_type: PillarKeyType):
+    def ensure_key_type_ipfs_content_present(self, key_type: PillarKeyType):
         cid = self.get_cid_for_key_type(key_type)
         if cid is None:
             raise KeyTypeNotPresent
         else:
             self.ensure_cid_content_present(cid)
+
+    def get_key_by_cid(self, cid: str) -> pgpy.PGPKey:
+        self.ensure_cid_content_present(cid)
+        return pgpy.PGPKey.from_file(os.path.join(self.config.ipfsdir, cid))
 
     def ensure_cid_content_present(self, cid: str):
         if not os.path.isfile(os.path.join(self.config.ipfsdir, cid)):
@@ -275,7 +233,7 @@ class KeyManager:
             self.loop.run_until_complete(self.ipfs.get(
                 cid, dstdir=self.config.ipfsdir))
 
-    def get_cid_for_key_type(self, key_type: PillarKeyType):
+    def get_cid_for_key_type(self, key_type: PillarKeyType) -> str:
         """gets the cid from the config for the given key type"""
         config_item_map = {
             PillarKeyType.REGISTRATION_PRIMARY_KEY:
@@ -322,18 +280,11 @@ class KeyManager:
             PillarKeyType.USER_PRIMARY_KEY)
 
     def generate_local_user_subkey(self):
-        key = self.generate_user_subkey()
-        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
-        self.config.user_subkey_cid = cid
-        self.config.save()
-        self.user_subkey = key
-
-    def generate_user_subkey(self):
-        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-        key.add_uid(self.user_primary_key.pubkey.userids[0],
-                    hashes=KeyOptions.hashes,
-                    ciphers=KeyOptions.ciphers,
-                    compression=KeyOptions.compression)
+        """
+        This method creates the initial user subkey during the bootstrap
+        process using the user primary key.
+        """
+        key = self.get_new_user_keypair()
 
         self.write_local_privkey(
             key, PillarKeyType.USER_SUBKEY)
@@ -341,9 +292,18 @@ class KeyManager:
         self.user_primary_key.add_subkey(
             key,
             usage=KeyOptions.usage)
-        pprint(self.user_primary_key.__dict__)
-        self.logger.info(
-            f"Created user subkey; fingerprint: {key.fingerprint}")
+        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
+        self.config.user_subkey_cid = cid
+        self.config.save()
+        self.user_subkey = key
+
+    def get_new_user_keypair(self) -> pgpy.PGPKey:
+        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+        key.add_uid(self.user_primary_key.pubkey.userids[0],
+                    usage=KeyOptions.usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
         return key
 
     def generate_local_node_subkey(self):
