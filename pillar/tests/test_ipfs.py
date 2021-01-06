@@ -27,3 +27,14 @@ class TestIPFSClient(asynctest.TestCase):
     async def test_get_id(self, mock_func):
         await self.instance.get_id()
         mock_func.assert_awaited()
+
+    @asynctest.patch('aioipfs.api.CoreAPI.get')
+    async def test_get_file(self, mock_func):
+        await self.instance.get_file('A file', dstdir='/tmp/fakefile')
+        mock_func.assert_awaited_with('A file', '/tmp/fakefile')
+
+    @SkipTest
+    @asynctest.patch('aioipfs.api.CoreAPI.add')
+    async def test_add_file(self, mock_func):
+        await self.instance.add_file('/tmp/file_path', recursive=True)
+        mock_func.assert_awaited_with('/tmp/file_path', recursive=True)
