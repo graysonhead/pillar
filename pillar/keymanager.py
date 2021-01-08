@@ -6,6 +6,7 @@ from .config import Config
 import asyncio
 import aioipfs
 from enum import Enum
+from uuid import uuid4
 import os
 import logging
 
@@ -102,8 +103,7 @@ class PillarPrivKey:
 
 
 class KeyOptions:
-    usage = {KeyFlags.Certify,
-             KeyFlags.Sign,
+    usage = {KeyFlags.Sign,
              KeyFlags.EncryptCommunications,
              KeyFlags.EncryptStorage}
     hashes = [HashAlgorithm.SHA256, HashAlgorithm.SHA384,
@@ -181,19 +181,27 @@ class KeyManager:
             self.logger.debug(f"Key found: {key.fingerprint}")
             return True
         except KeyError:
+            self.logger.debug("Key not found.")
             return False
 
     def this_key_is_newer(self, key: pgpy.PGPKey) -> bool:
-        original_key = self.keyring.key(key.fingerprint)
-        if original_key.created < key.created:
-            return True
-        else:
-            return False
+        with self.keyring.key(key.fingerprint) as original_key:
+            original_sig = self.get_value_and_requeue(
+                original_key._signatures)
+            new_sig = self.get_value_and_requeue(key._signatures)
+            self.logger.warning(f'comparing new key time: {new_sig.created}'
+                                f' to old key time: {original_sig.created}')
+            if original_sig.created < new_sig.created:
+                return True
+            else:
+                return False
 
     def this_key_validated_by_original(
             self, key: pgpy.PGPKey) -> pgpy.types.SignatureVerification:
-        original_key = self.keyring.key(key.fingerprint)
-        return original_key.verify(key)
+        with self.keyring.key(key.fingerprint) as original_key:
+            sig = self.get_value_and_requeue(key._signatures)
+            return original_key.pubkey.verify(key,
+                                              signature=sig)
 
     def load_keytype(self, key_type: PillarKeyType):
         try:
@@ -252,6 +260,7 @@ class KeyManager:
                         hashes=KeyOptions.hashes,
                         ciphers=KeyOptions.ciphers,
                         compression=KeyOptions.compression)
+            key |= key.certify(key)
             self.add_key_to_ipfs(key.pubkey)
             self.write_local_privkey(key, PillarKeyType[uid.comment])
             return self.add_key_to_ipfs(key.pubkey)
@@ -292,6 +301,9 @@ class KeyManager:
         self.user_primary_key.add_subkey(
             key,
             usage=KeyOptions.usage)
+        self.user_primary_key._signatures.pop()
+        self.user_primary_key |= \
+            self.user_primary_key.certify(self.user_primary_key)
         cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
         self.config.user_subkey_cid = cid
         self.config.save()
@@ -307,28 +319,39 @@ class KeyManager:
         return key
 
     def generate_local_node_subkey(self):
-        key = self.generate_node_subkey()
-        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
-        self.config.node_subkey_cid = cid
-        self.config.save()
+        self.config.node_uuid = str(uuid4())
+        key = self.get_new_user_keypair()
+        uid = pgpy.PGPUID.new(
+            self.config.node_uuid,
+            comment=PillarKeyType.NODE_SUBKEY.value,
+            email=self.user_primary_key.pubkey.userids[0].email)
+
+        usage = {KeyFlags.Certify,
+                 KeyFlags.Sign,
+                 KeyFlags.EncryptCommunications,
+                 KeyFlags.EncryptStorage}
+
+        key.add_uid(uid,
+                    usage=usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
+
         self.write_local_privkey(
             key, PillarKeyType.NODE_SUBKEY)
-        self.node_subkey = self.load_keytype(
-            PillarKeyType.NODE_SUBKEY)
-
-    def generate_node_subkey(self):
-        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-        usageflags = {KeyFlags.EncryptStorage,
-                      KeyFlags.EncryptCommunications}
-        uid = pgpy.PGPUID.new(self.config.node_uuid,
-                              comment=PillarKeyType.NODE_SUBKEY.value,
-                              email=self.user_primary_key.pubkey.email)
-        key.add_uid(uid, usage=usageflags)
         self.user_primary_key.add_subkey(
             key,
-            usage=usageflags)
-        self.logger.info(f"Created node subkey: {key.fingerprint}")
-        return key
+            usage=KeyOptions.usage)
+
+        self.user_primary_key._signatures.pop()
+        self.user_primary_key |= \
+            self.user_primary_key.certify(self.user_primary_key)
+        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
+        self.config.node_subkey_cid = cid
+
+        self.config.save()
+        self.node_subkey = self.load_keytype(
+            PillarKeyType.NODE_SUBKEY)
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(self.config.privkeydir, keytype.value)
@@ -346,6 +369,12 @@ class KeyManager:
     def add_key_to_local_storage(self, cid: str):
         self.loop.run_until_complete(self.ipfs.get(cid,
                                                    dstdir=self.config.ipfsdir))
+
+    @staticmethod
+    def get_value_and_requeue(dequeue):
+        val = dequeue.pop()
+        dequeue.append(val)
+        return val
 
 
 class EncryptionHelper:
