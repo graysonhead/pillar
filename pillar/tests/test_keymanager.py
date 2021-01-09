@@ -1,6 +1,6 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions,\
+from ..keymanager import KeyManager, KeyOptions, WontUpdateToStaleKey, \
     CannotImportSamePrimaryFingerprint, KeyNotInKeyring
 from ..config import Config
 import os
@@ -39,20 +39,16 @@ class MockPGPKeyFromFile(MagicMock):
         return k
 
 
-class mock_pgp_public_key(MockPGPKeyFromFile):
+class mock_pubkey0(MockPGPKeyFromFile):
     key_path = './data/pubkey0.key'
 
 
-class mock_same_pgp_public_key_with_subkey(MockPGPKeyFromFile):
+class mock_pubkey1(MockPGPKeyFromFile):
     key_path = './data/pubkey1.key'
 
 
-def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
-    super().__call__()
-    k, o = pgpy.PGPKey.from_file(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                     'data/pub.key'))
-    return k
+class mock_pubkey2(MockPGPKeyFromFile):
+    key_path = './data/pubkey2.key'
 
 
 class TestEmptyKeyManager(TestCase):
@@ -67,7 +63,7 @@ class TestEmptyKeyManager(TestCase):
         assert(isinstance(self.km, KeyManager))
 
     @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
-            new_callable=mock_pgp_public_key)
+            new_callable=mock_pubkey0)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key(self, *args):
@@ -76,7 +72,7 @@ class TestEmptyKeyManager(TestCase):
         self.km.ensure_cid_content_present.assert_called()
 
     @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
-            new_callable=mock_pgp_public_key)
+            new_callable=mock_pubkey0)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key_twice_raises_exception(self, *args):
@@ -93,7 +89,7 @@ class TestEmptyKeyManager(TestCase):
 
 class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
-            new_callable=mock_pgp_public_key)
+            new_callable=mock_pubkey1)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def setUp(self, *args):
@@ -105,9 +101,18 @@ class TestNonEmptyKeyManager(TestCase):
         self.km.import_peer_key('not_used')
 
     @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
-            new_callable=mock_same_pgp_public_key_with_subkey)
+            new_callable=mock_pubkey2)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_update_peer_key(self, *args, **kwargs):
         self.km.update_peer_key('not_used')
         self.km.get_key_by_cid.assert_called()
+
+    @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
+            new_callable=mock_pubkey0)
+    @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
+            new_callable=MagicMock)
+    def test_update_to_old_peer_key_raises_stale(self, *args, **kwargs):
+        with self.assertRaises(WontUpdateToStaleKey):
+            self.km.update_peer_key('not_used')
+            self.km.get_key_by_cid.assert_called()
