@@ -39,21 +39,12 @@ class MockPGPKeyFromFile(MagicMock):
         return k
 
 
-mock_pgp_public_key = MockPGPKeyFromFile
-mock_pgp_public_key.key_path = 'data/pubkey0.key'
+class mock_pgp_public_key(MockPGPKeyFromFile):
+    key_path = './data/pubkey0.key'
 
 
-def get_pubkey0():
-    def func(*args):
-        k, o = pgpy.PGPKey.from_file(
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         'data/pubkey0.key'))
-        return k
-    return func
-
-
-mock_same_pgp_public_key_with_subkey = MockPGPKeyFromFile
-mock_same_pgp_public_key_with_subkey.key_path = 'data/pubkey1.key'
+class mock_same_pgp_public_key_with_subkey(MockPGPKeyFromFile):
+    key_path = './data/pubkey1.key'
 
 
 def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
@@ -80,7 +71,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key(self, *args):
-        self.km.import_peer_key('not_a_cid')
+        self.km.import_peer_key('not_used')
         self.km.get_key_by_cid.assert_called()
         self.km.ensure_cid_content_present.assert_called()
 
@@ -89,7 +80,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key_twice_raises_exception(self, *args):
-        self.km.import_peer_key('notacid')
+        self.km.import_peer_key('not_used')
         with self.assertRaises(CannotImportSamePrimaryFingerprint):
             self.km.import_peer_key('notacid')
 
@@ -102,7 +93,7 @@ class TestEmptyKeyManager(TestCase):
 
 class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
-            new_callable=get_pubkey0)
+            new_callable=mock_pgp_public_key)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def setUp(self, *args):
