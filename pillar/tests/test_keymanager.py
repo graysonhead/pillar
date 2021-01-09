@@ -1,7 +1,7 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions, WontUpdateToStaleKey, \
-    CannotImportSamePrimaryFingerprint, KeyNotInKeyring
+from ..keymanager import KeyManager, KeyOptions, KeyNotValidated,\
+    CannotImportSamePrimaryFingerprint, KeyNotInKeyring, WontUpdateToStaleKey
 from ..config import Config
 import os
 from unittest.mock import patch, MagicMock
@@ -49,6 +49,10 @@ class mock_pubkey1(MockPGPKeyFromFile):
 
 class mock_pubkey2(MockPGPKeyFromFile):
     key_path = './data/pubkey2.key'
+
+
+class mock_invalid_pubkey2(MockPGPKeyFromFile):
+    key_path = './data/invalid_pubkey2.key'
 
 
 class TestEmptyKeyManager(TestCase):
@@ -114,5 +118,14 @@ class TestNonEmptyKeyManager(TestCase):
             new_callable=MagicMock)
     def test_update_to_old_peer_key_raises_stale(self, *args, **kwargs):
         with self.assertRaises(WontUpdateToStaleKey):
+            self.km.update_peer_key('not_used')
+            self.km.get_key_by_cid.assert_called()
+
+    @ patch('pillar.keymanager.KeyManager.get_key_by_cid',
+            new_callable=mock_invalid_pubkey2)
+    @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
+            new_callable=MagicMock)
+    def test_update_with_invalid_key_raises_exception(self, *args, **kwargs):
+        with self.assertRaises(KeyNotValidated):
             self.km.update_peer_key('not_used')
             self.km.get_key_by_cid.assert_called()
