@@ -1,4 +1,4 @@
-from .keymanager import KeyManager, PillarKeyType, PeerUser
+from .keymanager import KeyManager, PillarKeyType
 import asyncio
 
 
@@ -11,9 +11,6 @@ class LocalIdentity:
         self.loop = asyncio.get_event_loop()
         self.key_manager = key_manager
         self.cid = cid
-
-    def add_peer_user(self, peer: PeerUser):
-        self.peer_users.append(peer)
 
 
 class Node(LocalIdentity):

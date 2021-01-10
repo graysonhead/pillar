@@ -17,6 +17,10 @@ class IPFSClient:
         await self.check_client_exists()
         await self.client.add(*files, **kwargs)
 
+    async def add_str(self, *args: str, **kwargs):
+        await self.check_client_exists()
+        return await self.client.add_str(*args, **kwargs)
+
     async def send_pubsub_message(self, queue_id: str, message: str) -> None:
         await self.check_client_exists()
         await self.client.pubsub.pub(queue_id, message)

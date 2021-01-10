@@ -57,11 +57,10 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
 
 
 class TestEmptyKeyManager(TestCase):
-    def setUp(self):
-        configpath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                  'data/config.yaml')
-
-        self.config = Config(path=configpath)
+    @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
+    @ patch('asyncio.get_event_loop', new_callable=MagicMock)
+    def setUp(self, *args):
+        self.config = Config()
         self.km = KeyManager(self.config)
 
     def test_instantiate_keymanager_class(self):
@@ -92,15 +91,14 @@ class TestEmptyKeyManager(TestCase):
 
 
 class TestNonEmptyKeyManager(TestCase):
+    @ patch('asyncio.get_event_loop', new_callable=MagicMock)
+    @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def setUp(self, *args):
-        configpath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                  'data/config.yaml')
-
-        self.config = Config(path=configpath)
+        self.config = Config()
         self.km = KeyManager(self.config)
         self.km.import_peer_key('not_used')
 

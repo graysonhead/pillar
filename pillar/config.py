@@ -72,6 +72,12 @@ class Config:
             description="Path of Pillar configuration directory"
         ),
         ConfigOption(
+            'ipfs_directory',
+            [str],
+            default_value="/var/lib/pillar/ipfs",
+            description="Filesystem path where ipfs content is downloaded."
+        ),
+        ConfigOption(
             'public_key_path',
             [str],
             default_value="/etc/pillar/key.pub"
