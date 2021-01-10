@@ -11,30 +11,6 @@ import os
 import logging
 
 
-class Peer:
-    def __init__(self, cid: str):
-        self.primary_key_fingerprint = None
-        self.subkey_fingerprint = None
-        self.peer_listen_channels = []
-        self.cid = cid
-
-
-class PeerUser(Peer):
-    """
-    PeerUser represents an instance of User running on another pillar
-    instance.
-    """
-
-
-class PeerNode(Peer):
-    """
-    A remote instance of pillar that's running an instance of Node. Nodes
-    may provide a resource of some kind to the pillar cloud. As with the
-    local Node instance, a PeerNode has similar structure to its User
-    counterpart, but has a different set of capabilities.
-    """
-
-
 class KeyTypeNotPresent(Exception):
     """
     Raised when trying to load a key type which isnt present on the
@@ -90,16 +66,6 @@ class PillarKeyType(Enum):
     USER_PRIMARY_KEY = "USER_PRIMARY_KEY"
     USER_SUBKEY = "USER_SUBKEY"
     NODE_SUBKEY = "NODE_SUBKEY"
-
-
-class PillarPrivKey:
-    def __init__(self, config: Config, key_type: PillarKeyType):
-        self.config = config
-        self.logger = logging.getLogger(f'[{self.__class__.__name__}]')
-        self.logger.info("Loading key.")
-        self.path = os.path.join(config.privkeydir, key_type.value)
-        self.key, *d = pgpy.PGPKey().from_file(self.path)
-        self.key_type = key_type
 
 
 class KeyOptions:
