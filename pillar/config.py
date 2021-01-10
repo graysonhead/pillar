@@ -1,70 +1,151 @@
 import yaml
-import os
+
+UNSET = object
+
+
+class OptionNotValid(Exception):
+    pass
+
+
+class ConfigOption:
+
+    def __init__(self,
+                 attribute: str,
+                 valid_types: list,
+                 default_value=None,
+                 description: str = None,
+                 example: str = None):
+        self.attribute = attribute
+        self.valid_types = valid_types
+        self.default_value = default_value
+        self.description = description
+        if example:
+            self.example = example
+        else:
+            if default_value:
+                self.example = default_value
+        self.value = UNSET
+
+    def set(self, value=None) -> None:
+        if not value:
+            self.value = self.default_value
+        else:
+            if type(value) in self.valid_types:
+                self.value = value
+            else:
+                raise TypeError(f"Option {self.attribute} cannot accept value "
+                                f"{value}. It must be one of the following "
+                                f"types {self.valid_types}.")
+
+    def get(self):
+        if self.value == UNSET:
+            return self.default_value
+        else:
+            return self.value
 
 
 class Config:
     """
     Configuration options and yaml file loading and saving.
+
+    When creating from a .yaml file, use the .load_from_yaml() class method,
+    which will return an instance with values populated from the file path
+    provided.
     """
-    path = os.path.expanduser("~")+'/.config/pillar/config.yaml'
-    ipfs_url = "http://127.0.0.1:8080"
-    gpghome = os.path.expanduser("~")+'/.config/pillar/'
-    configdir = os.path.expanduser("~")+'/.config/pillar/'
-    ipfsdir = os.path.expanduser("~")+'/.config/pillar/ipfs/'
-    pubkey_path = os.path.expanduser("~")+'/.config/pillar/key.pub'
-    default_key_type = "RSA"
-    default_key_length = 4096
-    default_subkey_type = "RSA"
-    default_subkey_length = 4096
-    default_subkey_duration = '0'
-    primary_key_cid = None
-    subkey_cid = None
-    option_attribs = ["ipfs_url",
-                      "gpghome",
-                      "configdir",
-                      "ipfsdir",
-                      "pubkey_path",
-                      "default_key_length",
-                      "default_key_type",
-                      "default_subkey_length",
-                      "default_subkey_type",
-                      "default_subkey_duration",
-                      "primary_key_cid",
-                      "subkey_cid"]
+    options = [
+        ConfigOption(
+            'db_path',
+            [str],
+            default_value='/var/lib/pillar/pillar.db',
+            description="Filesystem path where the sqlite database is located"
+        ),
+        ConfigOption(
+            'ipfs_url',
+            [str],
+            default_value="http://127.0.0.1:8080",
+            description="URL of IPFS API connection"
+        ),
+        ConfigOption(
+            'config_directory',
+            [str],
+            default_value="/etc/pillar",
+            description="Path of Pillar configuration directory"
+        ),
+        ConfigOption(
+            'public_key_path',
+            [str],
+            default_value="/etc/pillar/key.pub"
+        ),
+        ConfigOption(
+            'default_key_type',
+            [str],
+            default_value="RSA",
+            description="GPG Key Type"
+        ),
+        ConfigOption(
+            'default_key_length',
+            [int],
+            default_value=4096,
+            description="Default length of generated keys"
+        ),
+        ConfigOption(
+            'default_subkey_type',
+            [str],
+            default_value="RSA",
+            description="Default type of generated subkeys"
+        ),
+        ConfigOption(
+            'default_subkey_length',
+            [int],
+            default_value=4096,
+            description="Default length of generated subkeys"
+        ),
+        ConfigOption(
+            'default_subkey_duration',
+            [int],
+            default_value=0,
+            description="Default valid duration of subkeys, 0 for infinite"
+        )
+    ]
 
-    def __init__(self, path=None):
-        self.load_file(path=path)
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            self.set_value(key, value)
 
-    def load_file(self, path=None):
-        """Load the config file."""
-        if path is not None:
-            self.path = path
-        if not os.path.isfile(self.path):
-            with open(self.path, 'r+') as config_file:
-                pass
+    @classmethod
+    def load_from_yaml(cls, path: str):
+        with open(path, 'r') as file:
+            file_dict = yaml.load(file, Loader=yaml.FullLoader)
+        return Config(**file_dict)
 
-        os.makedirs(self.configdir, exist_ok=True)
+    def _return_option_instance(self, option_name: str) -> ConfigOption:
+        try:
+            return next(
+                filter(lambda i: i.attribute == option_name, self.options)
+            )
+        except StopIteration:
+            raise OptionNotValid(f"{option_name} is not a valid configuration"
+                                 f"option.")
 
-        with open(self.path, 'r') as config_file:
-            self.file_content = yaml.load(config_file, Loader=yaml.FullLoader)
-            for option_name in self.option_attribs:
-                try:
-                    self.__setattr__(option_name,
-                                     self.file_content[option_name])
-                except TypeError:
-                    self.__setattr__(option_name,
-                                     getattr(Config, option_name))
-                except KeyError:
-                    self.__setattr__(option_name,
-                                     getattr(Config, option_name))
+    def set_value(self, option_name: str, value):
+        option = self._return_option_instance(option_name)
+        option.set(value=value)
 
-    def save(self, path=None):
-        if path is None:
-            path = self.path
-        with open(path, 'w+') as f:
-            f.write(yaml.dump(self.get_attrib_dict()))
+    def get_value(self, option_name: str):
+        option = self._return_option_instance(option_name)
+        return option.value
 
-    def get_attrib_dict(self):
-        """convert configuration options to a dict for saving et al."""
-        return {attrib: self.__dict__[attrib]
-                for attrib in self.option_attribs}
+    def get_dict(self) -> dict:
+        return_dict = {}
+        for option in self.options:
+            return_dict.update({option.attribute: option.get()})
+        return return_dict
+
+    def generate_default(self, path: str) -> None:
+        default_option_dict = {}
+        for option in self.options:
+            default_option_dict.update(
+                {option.attribute: option.default_value}
+            )
+        with open(path, 'w') as file:
+            file.write(yaml.dump(default_option_dict))

@@ -1,12 +1,1 @@
-configdir: .testuser
-default_key_length: 4096
-default_key_type: RSA
-default_subkey_length: 4096
-default_subkey_type: RSA
-default_subkey_duration: 1d
-gpghome: .testuser
-ipfs_url: http://127.0.0.1:8080
-ipfsdir: .testuser/ipfs
-pubkey_path: .testuser/key.pub
-primary_key_cid: null
-subkey_cid: null
+test_option: 'value_from_yaml'
