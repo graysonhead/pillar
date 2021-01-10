@@ -1,8 +1,9 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions, KeyNotValidated,\
-    CannotImportSamePrimaryFingerprint, KeyNotInKeyring, WontUpdateToStaleKey
+from ..keymanager import KeyManager, KeyOptions
 from ..config import Config
+from ..exceptions import KeyNotValidated, KeyNotInKeyring, \
+    CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 import os
 from unittest.mock import patch, MagicMock
 from pgpy.constants import PubKeyAlgorithm
