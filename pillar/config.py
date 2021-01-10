@@ -118,7 +118,7 @@ class Config:
             file_dict = yaml.load(file, Loader=yaml.FullLoader)
         return Config(**file_dict)
 
-    def _return_option_instance(self, option_name):
+    def _return_option_instance(self, option_name: str) -> ConfigOption:
         try:
             return next(
                 filter(lambda i: i.attribute == option_name, self.options)
