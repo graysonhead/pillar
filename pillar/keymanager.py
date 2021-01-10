@@ -139,13 +139,16 @@ class KeyManager:
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.latest_pubkey_cid = None
         self.peer_subkey_map = {}
+        self.peer_cid_fingerprint_map = {}
 
     def import_peer_key(self, cid):
         """
         Import a new key into the keyring
         """
-        self.ensure_cid_content_present(cid)
-        peer_key = self.get_key_by_cid(cid)
+        peer_key_message = self.get_key_message_by_cid(cid)
+        peer_key, other = pgpy.PGPKey.from_blob(peer_key_message.message)
+        with open(f'pillar/tests/data/{cid}', 'w+') as f:
+            f.write(str(peer_key_message))
 
         if self.key_already_in_keyring(peer_key.fingerprint):
             raise CannotImportSamePrimaryFingerprint
@@ -162,11 +165,14 @@ class KeyManager:
         """
         update an existing key in the keyring
         """
-        new_key = self.get_key_by_cid(cid)
+        new_key_message = self.get_key_message_by_cid(cid)
+        try:
+            new_key = self.verify_and_extract_key_from_key_message(
+                new_key_message)
+        except KeyError:
+            raise KeyNotInKeyring
         self.logger.info(
             f"Importing peer key: {new_key.fingerprint}")
-        if not self.key_already_in_keyring(new_key.fingerprint):
-            raise KeyNotInKeyring
         if not self.this_key_is_newer(new_key):
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
@@ -177,9 +183,9 @@ class KeyManager:
     def key_already_in_keyring(self, identifier) -> bool:
         try:
             self.logger.debug(f"checking for key in keyring: {identifier}")
-            key = self.keyring._get_key(identifier)
-            self.logger.debug(f"Key found: {key.fingerprint}")
-            return True
+            with self.keyring.key(identifier) as key:
+                self.logger.debug(f"Key found: {key.fingerprint}")
+                return True
         except KeyError:
             self.logger.debug("Key not found.")
             return False
@@ -230,10 +236,19 @@ class KeyManager:
         else:
             self.ensure_cid_content_present(cid)
 
-    def get_key_by_cid(self, cid: str) -> pgpy.PGPKey:
+    def get_key_message_by_cid(self, cid: str) -> pgpy.PGPMessage:
         self.ensure_cid_content_present(cid)
-        key, o = pgpy.PGPKey.from_file(os.path.join(self.config.ipfsdir, cid))
-        return key
+        msg = pgpy.PGPMessage.from_file(os.path.join(self.config.ipfsdir, cid))
+        return msg
+
+    def verify_and_extract_key_from_key_message(self,
+                                                key_message: pgpy.PGPMessage):
+        key, other = pgpy.PGPKey.from_blob(str(key_message.message))
+        with self.keyring.key(key.fingerprint) as original_key:
+            if original_key.verify(key_message):
+                return key
+            else:
+                raise KeyNotValidated
 
     def ensure_cid_content_present(self, cid: str):
         if not os.path.isfile(os.path.join(self.config.ipfsdir, cid)):
@@ -261,9 +276,8 @@ class KeyManager:
                         ciphers=KeyOptions.ciphers,
                         compression=KeyOptions.compression)
             key |= key.certify(key)
-            self.add_key_to_ipfs(key.pubkey)
             self.write_local_privkey(key, PillarKeyType[uid.comment])
-            return self.add_key_to_ipfs(key.pubkey)
+            return key
         else:
             raise KeyTypeAlreadyPresent
 
@@ -272,7 +286,9 @@ class KeyManager:
             self.config.node_id,
             comment=PillarKeyType.REGISTRATION_PRIMARY_KEY.value,
             email='noreply@pillarcloud.org')
-        cid = self.generate_primary_key(uid)
+        cid, key = self.generate_primary_key(uid)
+        from pprint import pprint
+        pprint(key.__dict__)
         self.config.registration_primary_key_cid = cid
         self.config.save()
         self.registration_primary_key = self.load_keytype(
@@ -282,11 +298,13 @@ class KeyManager:
         uid = pgpy.PGPUID.new(name,
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
                               email=email)
-        cid = self.generate_primary_key(uid)
+        key = self.generate_primary_key(uid)
+        self.user_primary_key = key
+        self.load_keytype(
+            PillarKeyType.USER_PRIMARY_KEY)
+        cid = self.add_key_message_to_ipfs(key.pubkey)
         self.config.user_primary_key_cid = cid
         self.config.save()
-        self.user_primary_key = self.load_keytype(
-            PillarKeyType.USER_PRIMARY_KEY)
 
     def generate_local_user_subkey(self):
         """
@@ -304,7 +322,7 @@ class KeyManager:
         self.user_primary_key._signatures.pop()
         self.user_primary_key |= \
             self.user_primary_key.certify(self.user_primary_key)
-        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
+        cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.config.user_subkey_cid = cid
         self.config.save()
         self.user_subkey = key
@@ -346,7 +364,7 @@ class KeyManager:
         self.user_primary_key._signatures.pop()
         self.user_primary_key |= \
             self.user_primary_key.certify(self.user_primary_key)
-        cid = self.add_key_to_ipfs(self.user_primary_key.pubkey)
+        cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.config.node_subkey_cid = cid
 
         self.config.save()
@@ -359,8 +377,11 @@ class KeyManager:
             self.logger.warn(f"Writing private key: {keypath}")
             f.write(str(key))
 
-    def add_key_to_ipfs(self, key: pgpy.PGPKey):
-        data = self.loop.run_until_complete(self.ipfs.add_str(str(key)))
+    def add_key_message_to_ipfs(self, key: pgpy.PGPKey):
+        message = pgpy.PGPMessage.new(
+            str(key), compression=CompressionAlgorithm.Uncompressed)
+        message |= self.user_primary_key.sign(message)
+        data = self.loop.run_until_complete(self.ipfs.add_str(str(message)))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
         self.latest_pubkey_cid = data['Hash']
