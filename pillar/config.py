@@ -130,7 +130,7 @@ class Config:
                 filter(lambda i: i.attribute == option_name, self.options)
             )
         except StopIteration:
-            raise OptionNotValid(f"{option_name} is not a valid configuration"
+            raise OptionNotValid(f"{option_name} is not a valid configuration "
                                  f"option.")
 
     def set_value(self, option_name: str, value):

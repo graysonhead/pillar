@@ -50,14 +50,24 @@ class TestConfigOptions(TestCase):
         self.assertEqual('This is an example', new_option.example)
 
 
+test_options = [ConfigOption('test_option',
+                             [str],
+                             default_value='default_value',
+                             description='This is an option')]
+
+
 class TestConfig(TestCase):
 
     def setUp(self) -> None:
+        self.original_options = Config.options
         Config.options = [ConfigOption('test_option',
                                        [str],
                                        default_value='default_value',
                                        description='This is an option')]
         self.config = Config(test_option='a_value')
+
+    def tearDown(self) -> None:
+        Config.options = self.original_options
 
     def test_set_invalid_option(self):
         with self.assertRaises(OptionNotValid):
@@ -76,6 +86,7 @@ class TestConfig(TestCase):
 class TestConfigLoadFromFile(TestCase):
 
     def setUp(self) -> None:
+        self.original_options = Config.options
         Config.options = [ConfigOption('test_option',
                                        [str],
                                        default_value='default_value',
@@ -83,6 +94,9 @@ class TestConfigLoadFromFile(TestCase):
         self.config = Config.load_from_yaml(os.path.join(os.path.dirname(
             os.path.abspath(__file__)
         ), 'data/config.yaml'))
+
+    def tearDown(self) -> None:
+        Config.options = self.original_options
 
     def test_value_set_from_yaml(self):
         result = self.config.get_value('test_option')
@@ -92,6 +106,7 @@ class TestConfigLoadFromFile(TestCase):
 class TestConfigWriteDefaultOptions(TestCase):
 
     def setUp(self) -> None:
+        self.original_options = Config.options
         Config.options = [ConfigOption('test_option',
                                        [str],
                                        default_value='default_value',
@@ -100,6 +115,7 @@ class TestConfigWriteDefaultOptions(TestCase):
         self.file_path = os.path.join(os.getcwd(), 'testconfig.yaml')
 
     def tearDown(self) -> None:
+        Config.options = self.original_options
         os.remove(self.file_path)
 
     def test_write_defaults_to_file(self):
