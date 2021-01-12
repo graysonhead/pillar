@@ -53,7 +53,7 @@ class KeyManager:
         self.user_primary_key_cid = None
         self.registration_primary_key_cid = None
         self.registration_primary_key = self.load_keytype(
-            PillarKeyType.USER_PRIMARY_KEY)
+            PillarKeyType.REGISTRATION_PRIMARY_KEY)
         self.user_primary_key = self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
         self.user_subkey = self.load_keytype(PillarKeyType.USER_SUBKEY)
@@ -133,31 +133,22 @@ class KeyManager:
 
     def load_keytype(self, key_type: PillarKeyType):
         try:
-            self.ensure_key_type_ipfs_content_present(key_type)
             return self.load_private_key_from_file(key_type)
         except KeyTypeNotPresent:
             return None
 
-    def load_private_key_from_file(self, key_type: PillarKeyType):
-        self.logger.info(f"Loading key type: {key_type.value}")
-        path = os.path.join(self.config.get_value('config_directory'),
-                            key_type.value)
-        key, d = pgpy.PGPKey().from_file(path)
-        return key
-
-    def key_not_present(self, key_type: PillarKeyType) -> bool:
-        cid = self.get_cid_for_key_type(key_type)
-        if cid is None:
-            return True
-        else:
-            return False
-
-    def ensure_key_type_ipfs_content_present(self, key_type: PillarKeyType):
-        cid = self.get_cid_for_key_type(key_type)
-        if cid is None:
+    def load_private_key_from_file(self,
+                                   key_type: PillarKeyType):
+        try:
+            self.logger.info(f"Loading key type: {key_type.value}")
+            print(self.config.get_value('config_directory'))
+            print(key_type.value)
+            path = os.path.join(self.config.get_value('config_directory'),
+                                key_type.value)
+            key, d = pgpy.PGPKey().from_file(path)
+            return key
+        except FileNotFoundError:
             raise KeyTypeNotPresent
-        else:
-            self.ensure_cid_content_present(cid)
 
     def get_key_message_by_cid(self, cid: str) -> pgpy.PGPMessage:
         self.ensure_cid_content_present(cid)
@@ -181,16 +172,9 @@ class KeyManager:
             self.loop.run_until_complete(self.ipfs.get_file(
                 cid, dstdir=self.config.get_value('ipfs_directory')))
 
-    def get_cid_for_key_type(self, key_type: PillarKeyType) -> str:
-        """gets the cid from the config for the given key type"""
-        if key_type == PillarKeyType.REGISTRATION_PRIMARY_KEY:
-            return self.registration_primary_key_cid
-        else:
-            return self.user_primary_key_cid
-
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
-        if self.key_not_present(PillarKeyType[uid.comment]):
+        if self.user_primary_key_cid is None:
             key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
             key.add_uid(uid,
                         usage=KeyOptions.usage,
