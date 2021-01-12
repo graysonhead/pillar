@@ -139,7 +139,7 @@ class Config:
 
     def get_value(self, option_name: str):
         option = self._return_option_instance(option_name)
-        return option.value
+        return option.get()
 
     def get_dict(self) -> dict:
         return_dict = {}

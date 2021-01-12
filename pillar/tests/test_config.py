@@ -83,6 +83,24 @@ class TestConfig(TestCase):
         self.assertEqual({'test_option': 'a_value'}, result)
 
 
+class TestEmptyConfig(TestCase):
+
+    def setUp(self) -> None:
+        self.original_options = Config.options
+        Config.options = [ConfigOption('test_option',
+                                       [str],
+                                       default_value='default_value',
+                                       description='This is an option')]
+        self.config = Config()
+
+    def tearDown(self) -> None:
+        Config.options = self.original_options
+
+    def test_get_empty_option_returns_default_value(self):
+        result = self.config.get_value('test_option')
+        self.assertEqual('default_value', result)
+
+
 class TestConfigLoadFromFile(TestCase):
 
     def setUp(self) -> None:
