@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, \
     Column, \
     Integer, \
     String
+from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import Config
@@ -23,8 +24,8 @@ class PillarDB:
     """
 
     def __init__(self, config: Config):
-        self.engine = self._get_engine(
-            f"sqlite:///{config.get_value('db_path')}")
+        self.db_uri = config.get_value('db_uri')
+        self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
 
     def _get_engine(self, uri: str):
@@ -42,6 +43,20 @@ class PillarDataStore:
 
     def get_session(self):
         return self.pdb.get_session()
+
+    def database_exists(self):
+        return database_exists(self.pdb.db_uri)
+
+    def create_database(self):
+        self.logger.info("Creating database")
+        Base.metadata.create_all(self.pdb.engine)
+
+    def reinitialize_database(self):
+        self.logger.info("Deleting database:")
+        for tbl in reversed(Base.metadata.sorted_tables):
+            self.logger.info(f"Deleted table {tbl}")
+            self.pdb.engine.execute(tbl.delete())
+        self.create_database()
 
     def add_channel(self, channel: IPRPCChannel):
         new_row = Channel(queue_id=channel.queue_id)

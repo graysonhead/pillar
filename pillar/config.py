@@ -54,10 +54,10 @@ class Config:
     """
     options = [
         ConfigOption(
-            'db_path',
+            'db_uri',
             [str],
-            default_value='/var/lib/pillar/pillar.db',
-            description="Filesystem path where the sqlite database is located"
+            default_value='sqlite:////var/lib/pillar/pillar.db',
+            description="URI of database"
         ),
         ConfigOption(
             'ipfs_url',
