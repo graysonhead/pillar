@@ -117,8 +117,8 @@ class KeyManager:
             original_sig = self.get_value_and_requeue(
                 original_key._signatures)
             new_sig = self.get_value_and_requeue(key._signatures)
-            self.logger.warning(f'comparing new key time: {new_sig.created}'
-                                f' to old key time: {original_sig.created}')
+            self.logger.info(f'comparing new key time: {new_sig.created}'
+                             f' to old key time: {original_sig.created}')
             if original_sig.created < new_sig.created:
                 return True
             else:
@@ -141,8 +141,6 @@ class KeyManager:
                                    key_type: PillarKeyType):
         try:
             self.logger.info(f"Loading key type: {key_type.value}")
-            print(self.config.get_value('config_directory'))
-            print(key_type.value)
             path = os.path.join(self.config.get_value('config_directory'),
                                 key_type.value)
             key, d = pgpy.PGPKey().from_file(path)
