@@ -44,8 +44,6 @@ instance_b = ContrivedInstance(
 
 
 for k, v in instance_b.key_manager.user_primary_key.subkeys.items():
-    with open('pillar/tests/data/pubkey0.msgkey', 'w+') as f:
-        f.write(str(instance_b.key_manager.user_primary_key.pubkey))
 
     peer_b_user_subkey_fingerprint = v.fingerprint
 
