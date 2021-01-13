@@ -68,6 +68,17 @@ class PillarDataStore:
             self.logger.error(f"Could not add channel to datastore: {e}")
             session.rollback()
 
+    def create_database_if_not_exist(self, purge=False):
+        if not self.database_exists() and not purge:
+            self.logger.info("No database found, creating database")
+            self.create_database()
+        elif self.database_exists() and purge:
+            self.logger.warn("Database found and --purge set, "
+                             "recreating database")
+            self.reinitialize_database()
+        else:
+            self.logger.info("Found existing database")
+
     def get_channels(self) -> list:
         session = self.get_session()
         try:
