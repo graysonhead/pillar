@@ -1,5 +1,4 @@
-from .keymanager import KeyManager, PillarKeyType
-import asyncio
+from .keymanager import KeyManager
 
 
 class LocalIdentity:
@@ -8,7 +7,6 @@ class LocalIdentity:
 
     def __init__(self, key_manager: KeyManager,
                  cid: str = None):
-        self.loop = asyncio.get_event_loop()
         self.key_manager = key_manager
         self.cid = cid
 
