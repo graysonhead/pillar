@@ -58,7 +58,6 @@ class KeyManager:
             PillarKeyType.USER_PRIMARY_KEY)
         self.user_subkey = self.load_keytype(PillarKeyType.USER_SUBKEY)
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
-        self.latest_pubkey_cid = None
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
         self.node_uuid = None
@@ -296,7 +295,7 @@ class KeyManager:
         data = self.loop.run_until_complete(self.ipfs.add_str(str(message)))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
-        self.latest_pubkey_cid = data['Hash']
+        self.user_primary_key_cid = data['Hash']
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
