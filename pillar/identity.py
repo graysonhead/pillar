@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from .keymanager import KeyManager, PillarKeyType, EncryptionHelper
 from .config import Config
 from .IPRPC.channel import IPRPCChannel
@@ -8,6 +9,9 @@ from .ipfs import IPFSClient
 from uuid import uuid4
 import pgpy
 import logging
+=======
+from .keymanager import KeyManager
+>>>>>>> 83a9424 (fix: pep8; remove vestigial loop)
 
 
 @IPRPCRegistry.register_rpc_call
