@@ -3,6 +3,8 @@ from pillar.config import Config
 from argparse import Namespace
 import logging
 from pillar.db import PillarDataStore
+from pillar.keymanager import KeyManager
+from pillar.identity import User
 from pathlib import Path
 
 
@@ -15,6 +17,8 @@ class CLI:
             logging.basicConfig(level=getattr(logging, self.args.verb))
         self.config = self.get_config(self.args.config)
         self.pds = PillarDataStore(self.config)
+        self.key_manager = KeyManager(self.config)
+        self.user = None
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
@@ -54,7 +58,12 @@ class CLI:
         return config
 
     def bootstrap_node(self):
+        print("Bootstrapping Pillar")
+        bootstrap_name = input("Please enter your name for key generation:")
+        bootstrap_email = input("Please enter your email for key generation")
         self.pds.create_database_if_not_exist(purge=self.args.purge)
+        self.user = User(self.key_manager)
+        self.user.bootstrap(bootstrap_name, bootstrap_email)
 
     def __repr__(self):
         return "<CLI>"
