@@ -1,6 +1,6 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions
+from ..keymanager import KeyManager, KeyOptions, PillarKeyType
 from ..config import Config
 from ..exceptions import KeyNotValidated, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
@@ -127,3 +127,7 @@ class TestNonEmptyKeyManager(TestCase):
         with self.assertRaises(KeyNotValidated):
             self.km.update_peer_key('not_used')
             self.km.get_key_message_by_cid.assert_called()
+
+    def test_load_keytype_no_key(self):
+        key = self.km.load_keytype(PillarKeyType.USER_SUBKEY)
+        self.assertEqual(key, None)
