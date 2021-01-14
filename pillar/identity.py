@@ -17,7 +17,7 @@ class Node(LocalIdentity):
     def bootstrap(self):
         self.key_manager.generate_local_node_subkey()
         self.cid = \
-            self.key_manager.get_cid_for_key_type(PillarKeyType.NODE_SUBKEY)
+            self.key_manager.cid
         self.profile = self.create_profile()
 
 
@@ -26,4 +26,4 @@ class User(LocalIdentity):
         self.key_manager.generate_user_primary_key(name, email)
         self.key_manager.generate_local_user_subkey()
         self.cid = \
-            self.key_manager.get_cid_for_key_type(PillarKeyType.USER_SUBKEY)
+            self.key_manager.cid
