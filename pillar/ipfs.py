@@ -1,48 +1,43 @@
 import aioipfs
-import asyncio
 
 
 class IPFSClient:
 
     def __init__(self, aioipfs_config: dict = None):
         self.aioipfs_config = aioipfs_config or {}
-        self.client = None
-        self.loop = None
 
     async def get_file(self, cid: str, dstdir='.') -> None:
-        await self.check_client_exists()
-        await self.client.get(cid, dstdir)
+        client = self.get_client()
+        await client.get(cid, dstdir)
+        await client.close()
 
     async def add_file(self, *files: str, **kwargs):
-        await self.check_client_exists()
-        await self.client.add(*files, **kwargs)
+        client = self.get_client()
+        await client.add(*files, **kwargs)
+        await client.close()
 
     async def add_str(self, *args: str, **kwargs):
-        await self.check_client_exists()
-        return await self.client.add_str(*args, **kwargs)
+        client = self.get_client()
+        result = await client.add_str(*args, **kwargs)
+        await client.close()
+        return result
 
     async def send_pubsub_message(self, queue_id: str, message: str) -> None:
-        await self.check_client_exists()
-        await self.client.pubsub.pub(queue_id, message)
+        client = self.get_client()
+        await client.pubsub.pub(queue_id, message)
+        await client.close()
 
     async def get_pubsub_message(self, queue_id: str) -> str:
-        await self.check_client_exists()
-        async for message in self.client.pubsub.sub(queue_id):
+        client = self.get_client()
+        async for message in client.pubsub.sub(queue_id):
+            await client.close()
             yield message
 
     async def get_id(self) -> dict:
-        await self.check_client_exists()
-        id = await self.client.core.id()
+        client = self.get_client()
+        id = await client.core.id()
+        await client.close()
         return id
 
-    async def check_client_exists(self) -> None:
-        if not self.client:
-            self.client = aioipfs.AsyncIPFS(**self.aioipfs_config)
-            self.loop = asyncio.get_event_loop()
-
-    async def close_client(self) -> None:
-        await self.client.close()
-
-    def __del__(self):
-        asyncio.run(self.check_client_exists())
-        asyncio.run(self.close_client())
+    def get_client(self) -> aioipfs.AsyncIPFS:
+        return aioipfs.AsyncIPFS(**self.aioipfs_config)

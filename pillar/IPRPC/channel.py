@@ -152,13 +152,14 @@ class IPRPCChannel(Process):
         async for message in self.ipfs.get_pubsub_message(self.queue_id):
             if not message['from'].decode() == self.our_ipfs_peer_id:
                 raw_message = unquote(message['data'].decode('utf-8'))
-                self.logger.info(f"Got raw message: {message}")
                 yield raw_message
 
     async def _get_message(self):
         async for message in self._get_from_ipfs():
             try:
-                yield IPRPCRegistry.deserialize_from_json(message)
+                message = IPRPCRegistry.deserialize_from_json(message)
+                self.logger.info(f"Got message from peer: {message}")
+                yield message
             except Exception as e:
                 self.logger.warning(f"Decoding failed on message: {e}")
 
