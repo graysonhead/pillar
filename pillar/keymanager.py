@@ -5,10 +5,10 @@ from pgpy.types import Fingerprint
 from .config import Config
 import asyncio
 from .ipfs import IPFSClient
-from .exceptions import KeyNotValidated, KeyNotInKeyring, KeyTypeNotPresent,\
+from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from enum import Enum
+from enum import Enum, Flag
 from uuid import uuid4
 import os
 import logging
@@ -19,6 +19,23 @@ class PillarKeyType(Enum):
     USER_PRIMARY_KEY = "USER_PRIMARY_KEY"
     USER_SUBKEY = "USER_SUBKEY"
     NODE_SUBKEY = "NODE_SUBKEY"
+
+
+class KeyTypes(Flag):
+    REGISTRATION = 0x0
+    PRIMARY = 0x1
+    USER = 0x2
+    NODE = 0x4
+
+
+class KeyManagerStatus(Enum):
+    UNREGISTERED = "UNREGISTERED"
+    NODE = "NODE"
+    USER = "USER"
+    PRIMARY = "PRIMARY"
+    PRIMARY_NODE = "PRIMARY+NODE"
+    PRIMARY_USER = "PRIMARY+USER"
+    PRIMARY_NODE_USER = "PRIMARY+NODE+USER"
 
 
 class KeyOptions:
@@ -62,6 +79,41 @@ class KeyManager:
         self.peer_cid_fingerprint_map = {}
         self.node_uuid = None
 
+    def get_status(self) -> KeyManagerStatus:
+        present_keys = 0x0
+        if self.registration_primary_key is not None:
+            present_keys |= KeyTypes.REGISTRATION.value
+        else:
+            if self.user_primary_key is not None:
+                present_keys |= KeyTypes.PRIMARY.value
+            if self.user_subkey is not None:
+                present_keys |= KeyTypes.USER.value
+            if self.node_subkey is not None:
+                present_keys |= KeyTypes.NODE.value
+
+        if present_keys == KeyTypes.REGISTRATION.value:
+            return KeyManagerStatus.UNREGISTERED
+        if present_keys == KeyTypes.PRIMARY.value:
+            return KeyManagerStatus.PRIMARY
+        if present_keys == (KeyTypes.PRIMARY.value | KeyTypes.NODE.value):
+            return KeyManagerStatus.PRIMARY_NODE
+        if present_keys == (KeyTypes.PRIMARY.value | KeyTypes.USER.value):
+            return KeyManagerStatus.PRIMARY_USER
+        if present_keys ==\
+           (KeyTypes.PRIMARY.value | KeyTypes.NODE.value |
+                KeyTypes.USER.value):
+            return KeyManagerStatus.PRIMARY_NODE_USER
+        if present_keys == KeyTypes.NODE.value:
+            return KeyManagerStatus.NODE
+        if present_keys == KeyTypes.USER.value:
+            return KeyManagerStatus.USER
+        if present_keys == (KeyTypes.NODE.value | KeyTypes.USER.value):
+            return KeyManagerStatus.NODE_USER
+        return KeyManagerStatus.UNREGISTERED
+
+    def is_registered(self) -> bool:
+        return self.get_status() != KeyManagerStatus.UNREGISTERED
+
     def import_peer_key(self, cid):
         """
         Import a new key into the keyring
@@ -97,7 +149,7 @@ class KeyManager:
         if not self.this_key_is_newer(new_key):
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
-            raise KeyNotValidated
+            raise KeyNotVerified
 
         self.keyring.load(new_key)
 
@@ -160,7 +212,7 @@ class KeyManager:
             if original_key.verify(key_message):
                 return key
             else:
-                raise KeyNotValidated
+                raise KeyNotVerified
 
     def ensure_cid_content_present(self, cid: str):
         if not os.path.isfile(
@@ -197,8 +249,6 @@ class KeyManager:
             email='noreply@pillarcloud.org')
         cid, key = self.generate_primary_key(uid)
         self.set_registration_primary_key_cid(cid)
-        from pprint import pprint
-        pprint(key.__dict__)
         self.registration_primary_key_cid = cid
         self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
@@ -285,7 +335,7 @@ class KeyManager:
         keypath = os.path.join(
             self.config.get_value('config_directory'), keytype.value)
         with open(keypath, 'w+') as f:
-            self.logger.warn(f"Writing private key: {keypath}")
+            self.logger.warning(f"Writing private key: {keypath}")
             f.write(str(key))
 
     def add_key_message_to_ipfs(self, key: pgpy.PGPKey):

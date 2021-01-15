@@ -1,12 +1,22 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions, PillarKeyType
+from ..keymanager import KeyManager, KeyOptions, PillarKeyType,\
+    KeyManagerStatus
 from ..config import Config
-from ..exceptions import KeyNotValidated, KeyNotInKeyring, \
+from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 import os
 from unittest.mock import patch, MagicMock
 from pgpy.constants import PubKeyAlgorithm
+import shutil
+
+
+def remove_directories(dirs: list):
+    for dir in dirs:
+        try:
+            shutil.rmtree(dir)
+        except FileNotFoundError:
+            pass
 
 
 class mock_new_pgp_public_key(MagicMock):
@@ -89,6 +99,13 @@ class TestEmptyKeyManager(TestCase):
         with self.assertRaises(KeyNotInKeyring):
             self.km.update_peer_key('not_used')
 
+    def test_get_status(self):
+        status = self.km.get_status()
+        self.assertEqual(status, KeyManagerStatus.UNREGISTERED)
+
+    def test_is_registered(self):
+        self.assertEqual(self.km.is_registered(), False)
+
 
 class TestNonEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
@@ -124,10 +141,42 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_update_with_invalid_key_raises_exception(self, *args, **kwargs):
-        with self.assertRaises(KeyNotValidated):
+        with self.assertRaises(KeyNotVerified):
             self.km.update_peer_key('not_used')
             self.km.get_key_message_by_cid.assert_called()
 
     def test_load_keytype_no_key(self):
         key = self.km.load_keytype(PillarKeyType.USER_SUBKEY)
         self.assertEqual(key, None)
+
+
+class TestKeyManagerSubkeyGeneration(TestCase):
+    @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+            new_callable=MagicMock)
+    def setUp(self, *args):
+        self.config = Config()
+        self.km = KeyManager(self.config)
+        self.config.set_value('config_directory', '.unittestconfigdir')
+        dir = self.config.get_value('config_directory')
+        if not os.path.exists(dir):
+            os.makedirs(self.config.get_value('config_directory'))
+        self.km.generate_user_primary_key("name", "email")
+
+    def tearDown(self):
+        remove_directories([self.config.get_value('config_directory')])
+
+    @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+            new_callable=MagicMock)
+    def test_generate_local_user_subkey(self, *args):
+        self.km.generate_local_user_subkey()
+        self.km.add_key_message_to_ipfs.assert_called()
+
+    @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+            new_callable=MagicMock)
+    def test_generate_local_node_subkey(self, *args):
+        self.km.generate_local_node_subkey()
+        self.km.add_key_message_to_ipfs.assert_called()
+
+    def test_get_status_with_primary_key_present(self, *args):
+        status = self.km.get_status()
+        self.assertEqual(status, KeyManagerStatus.PRIMARY)
