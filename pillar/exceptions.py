@@ -28,7 +28,7 @@ class MessageCouldNotBeVerified(Exception):
     """
 
 
-class KeyNotValidated(Exception):
+class KeyNotVerified(Exception):
     """
     Raised when attemting to update a key with one that is not validated
     by an existing key in the keyring.
