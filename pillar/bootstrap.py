@@ -1,6 +1,8 @@
 from argparse import Namespace
 from pillar.config import Config
 from pillar.db import PillarDataStore
+from pillar.identity import User, Node
+from pillar.keymanager import KeyManager
 from pathlib import Path
 import os
 import sys
@@ -17,6 +19,9 @@ class Bootstrapper:
         self.key_manager = None
         self.config_path = None
         self.config = None
+        self.bootstrap_node_subkey = None
+        self.user_key_name = None
+        self.user_key_email = None
 
     def bootstrap(self):
         self.bootstrap_pre()
@@ -34,6 +39,7 @@ class Bootstrapper:
     def bootstrap_pre(self):
         self.config_path, self.config = self.bootstrap_config_file_pre()
         self.pds = self.bootstrap_pds_pre()
+        self.key_manager = self.bootstrap_keymanager_pre()
 
     def bootstrap_pds_pre(self) -> PillarDataStore:
         pds = PillarDataStore(self.config)
@@ -56,9 +62,65 @@ class Bootstrapper:
         self.pds.create_database(purge=self.args.purge)
         print("Database created")
 
+    def bootstrap_keymanager_pre(self):
+        keymanager = KeyManager(self.config)
+        if keymanager.is_registered():
+            if not self.args.purge:
+                raise FileExistsError(
+                    f"We found existing keys in the config_directory ("
+                    f"{self.config.get_value('config_directory')}),"
+                )
+            else:
+                pass
+        answer = input(
+            "Pillar has two identity types, Users and Nodes. User subkeys \n"
+            "represent you on the network, and nodes represent autonomous \n"
+            "daemons. If you plan on running both the daemon and client from\n"
+            " this host, the default selection of 'both' will suffice. If \n"
+            "this system won't normally be online (such as a laptop), and \n"
+            "you will only use it to interact with other nodes, you should \n"
+            "select 'user'. Which subkeys would you like to bootstrap? \n"
+            "[both] / user: "
+        )
+        if answer == '':
+            self.bootstrap_node_subkey = True
+            self.planned_steps.append("Bootstrap Node subkey and User subkey")
+        elif answer.lower() == 'both':
+            self.bootstrap_node_subkey = True
+            self.planned_steps.append("Bootstrap Node subkey and User subkey")
+        elif answer.lower() == 'user':
+            self.bootstrap_node_subkey = False
+            self.planned_steps.append("Bootstrap User subkey")
+        else:
+            print("Please type 'both', or 'user'")
+            sys.exit(1)
+        user_name = input("Please type your full name for key generation: ")
+        if not user_name:
+            print("Name field cannot be blank")
+            sys.exit(1)
+        else:
+            self.user_key_name = user_name
+        user_email = input(
+            "Please type your e-mail address for key generation: "
+        )
+        if not user_email:
+            print("Email field cannot be blank")
+        else:
+            self.user_key_email = user_email
+
+        return keymanager
+
+    def bootstrap_keymanager_exec(self):
+        self.user = User(self.key_manager)
+        self.user.bootstrap(self.user_key_name, self.user_key_email)
+        if self.bootstrap_node_subkey:
+            self.node = Node(self.key_manager)
+            self.node.bootstrap()
+
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()
         self.bootstrap_pds_exec()
+        self.bootstrap_keymanager_exec()
 
     def bootstrap_config_file_exec(self):
         print(f"Writing config file {self.config_path}")
