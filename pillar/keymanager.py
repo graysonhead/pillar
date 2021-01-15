@@ -8,6 +8,7 @@ from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent, InvalidKeyType
+
 from enum import Enum, Flag
 from uuid import uuid4
 import os
