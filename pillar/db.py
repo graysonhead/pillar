@@ -12,6 +12,10 @@ import logging
 Base = declarative_base()
 
 
+class DatabaseExists(Exception):
+    pass
+
+
 class Channel(Base):
     __tablename__ = 'channels'
     id = Column(Integer, primary_key=True)
@@ -47,9 +51,15 @@ class PillarDataStore:
     def database_exists(self):
         return database_exists(self.pdb.db_uri)
 
-    def create_database(self):
+    def create_database(self, purge: bool = False):
         self.logger.info("Creating database")
-        Base.metadata.create_all(self.pdb.engine)
+        if not purge:
+            Base.metadata.create_all(self.pdb.engine)
+        else:
+            if self.database_exists():
+                self.reinitialize_database()
+            else:
+                self.create_database()
 
     def reinitialize_database(self):
         self.logger.info("Deleting database:")
@@ -68,16 +78,17 @@ class PillarDataStore:
             self.logger.error(f"Could not add channel to datastore: {e}")
             session.rollback()
 
-    def create_database_if_not_exist(self, purge=False):
-        if not self.database_exists() and not purge:
-            self.logger.info("No database found, creating database")
-            self.create_database()
-        elif self.database_exists() and purge:
-            self.logger.warn("Database found and --purge set, "
-                             "recreating database")
-            self.reinitialize_database()
-        else:
-            self.logger.info("Found existing database")
+    # def create_database_if_not_exist(self, purge=False):
+    #     if not self.database_exists() and not purge:
+    #         self.logger.info("No database found, creating database")
+    #         self.create_database()
+    #     elif self.database_exists() and purge:
+    #         self.logger.warn("Database found and --purge set, "
+    #                          "recreating database")
+    #         self.reinitialize_database()
+    #     else:
+    #         self.logger.info("Found existing database")
+    #         raise DatabaseExists
 
     def get_channels(self) -> list:
         session = self.get_session()

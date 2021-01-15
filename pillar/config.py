@@ -148,10 +148,13 @@ class Config:
         return return_dict
 
     def generate_config(self, path: str) -> None:
+        with open(path, 'w') as file:
+            file.write(self.generate_yaml())
+
+    def generate_yaml(self) -> str:
         default_option_dict = {}
         for option in self.options:
             default_option_dict.update(
-                {option.attribute: option.value}
+                {option.attribute: option.get()}
             )
-        with open(path, 'w') as file:
-            file.write(yaml.dump(default_option_dict))
+        return yaml.dump(default_option_dict)

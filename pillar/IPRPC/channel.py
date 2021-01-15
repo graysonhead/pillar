@@ -60,11 +60,13 @@ class IPRPCChannel(Process):
         asyncio.ensure_future(
             self._handler_loop(
                 self._handle_incoming_messages,
+                sleep=1
             )
         )
         asyncio.ensure_future(
             self._handler_loop(
                 self._handle_tx_queue_messages,
+                sleep=1
             )
         )
         asyncio.ensure_future(

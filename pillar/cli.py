@@ -4,7 +4,7 @@ from argparse import Namespace
 import logging
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager
-from pillar.identity import User
+from pillar.bootstrap import Bootstrapper
 from pathlib import Path
 
 
@@ -15,17 +15,21 @@ class CLI:
         self.args = self.parse_args(args)
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
-        self.config = self.get_config(self.args.config)
-        self.pds = PillarDataStore(self.config)
-        self.key_manager = KeyManager(self.config)
-        self.user = None
+        if not self.args.sub_command == 'bootstrap':
+            self.config = self.get_config(self.args.config)
+            self.pds = PillarDataStore(self.config)
+            self.key_manager = KeyManager(self.config)
+            self.user = None
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
-            print("Bootstrapping Pillar Node")
-            self.bootstrap_node()
-        else:
-            raise SyntaxError("No subcommand supplied")
+            self.bootstrap()
+
+    def bootstrap(self):
+        bootstrap = Bootstrapper(
+            self.args
+        )
+        bootstrap.bootstrap()
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()
@@ -50,20 +54,11 @@ class CLI:
             config = Config.load_from_yaml(str(path))
         except FileNotFoundError:
             config = Config()
-            config.generate_config(config_path)
             self.logger.info(f"Didn't find config file, created one at"
                              f" {config_path}")
 
         self.logger.info(f"Loaded options: {config.get_dict()}")
         return config
-
-    def bootstrap_node(self):
-        print("Bootstrapping Pillar")
-        bootstrap_name = input("Please enter your name for key generation:")
-        bootstrap_email = input("Please enter your email for key generation")
-        self.pds.create_database_if_not_exist(purge=self.args.purge)
-        self.user = User(self.key_manager)
-        self.user.bootstrap(bootstrap_name, bootstrap_email)
 
     def __repr__(self):
         return "<CLI>"
