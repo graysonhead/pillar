@@ -8,7 +8,10 @@ from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent, InvalidKeyType
+<<<<<<< HEAD
 
+=======
+>>>>>>> c88f9d61e9f341fc89465191d062263de078eedf
 from enum import Enum, Flag
 from uuid import uuid4
 import os
@@ -123,12 +126,17 @@ class KeyManager:
         except CannotImportSamePrimaryFingerprint:
             return self.update_peer_key(cid)
 
+<<<<<<< HEAD
     def import_peer_key_from_cid(self, cid):
+=======
+    def import_peer_key(self, cid):
+>>>>>>> c88f9d61e9f341fc89465191d062263de078eedf
         """
         Import a new key into the keyring from ipfs cid
         """
         peer_key_message = self.get_key_message_by_cid(cid)
         peer_key, other = pgpy.PGPKey.from_blob(peer_key_message.message)
+<<<<<<< HEAD
         with open(f'pillar/tests/data/{cid}', 'w+') as f:
             f.write(str(peer_key_message))
         return self.import_peer_key(peer_key)
@@ -138,6 +146,8 @@ class KeyManager:
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
             self.import_peer_key(key, persist=False)
+=======
+>>>>>>> c88f9d61e9f341fc89465191d062263de078eedf
 
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
         """
