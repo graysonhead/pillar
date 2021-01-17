@@ -124,6 +124,7 @@ class TestIPRPCChannel(asynctest.TestCase):
         await self.channel._set_our_ipfs_peer_id()
         self.assertEqual('test_id', self.channel.our_ipfs_peer_id)
 
+    @SkipTest
     async def test_get_text(self):
         test_text = "Hello, receiving this message!"
         raw_message = generate_fake_pubsub_message('other_peer',
