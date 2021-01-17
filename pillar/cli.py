@@ -15,12 +15,13 @@ class CLI:
     def __init__(self, args: list):
         self.logger = logging.getLogger(self.__repr__())
         self.args = self.parse_args(args)
+
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
         if not self.args.sub_command == 'bootstrap':
             self.config = self.get_config(self.args.config)
             self.pds = PillarDataStore(self.config)
-            self.key_manager = KeyManager(self.config)
+            self.key_manager = KeyManager(self.config, self.pds)
 
     def run(self):
         if self.args.sub_command == 'bootstrap':

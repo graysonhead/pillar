@@ -8,6 +8,7 @@ from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
+from pillar.db import PillarDataStore
 from enum import Enum, Flag
 from uuid import uuid4
 import os
@@ -61,12 +62,13 @@ class KeyManager:
     the keyring used to validate and encrypt messages to peers.
     """
 
-    def __init__(self, config: Config):
-        self.logger = logging.getLogger('[KeyManager]')
+    def __init__(self, config: Config, pds: PillarDataStore):
+        self.logger = logging.getLogger('<KeyManager>')
         self.keyring = pgpy.PGPKeyring()
         self.ipfs = IPFSClient()
         self.loop = asyncio.new_event_loop()
         self.config = config
+        self.pds = pds
         self.user_primary_key_cid = None
         self.registration_primary_key_cid = None
         self.registration_primary_key = self.load_keytype(
@@ -78,6 +80,7 @@ class KeyManager:
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
         self.node_uuid = None
+        self.import_peer_keys_from_database()
 
     def get_status(self) -> KeyManagerStatus:
         present_keys = 0x0
@@ -114,21 +117,34 @@ class KeyManager:
     def is_registered(self) -> bool:
         return self.get_status() != KeyManagerStatus.UNREGISTERED
 
-    def import_peer_key(self, cid):
+    def import_peer_key_from_cid(self, cid):
         """
-        Import a new key into the keyring
+        Import a new key into the keyring from ipfs cid
         """
         peer_key_message = self.get_key_message_by_cid(cid)
         peer_key, other = pgpy.PGPKey.from_blob(peer_key_message.message)
         with open(f'pillar/tests/data/{cid}', 'w+') as f:
             f.write(str(peer_key_message))
+        return self.import_peer_key(peer_key)
 
+    def import_peer_keys_from_database(self):
+        peer_keys = self.pds.get_keys()
+        self.logger.info("Loading peer keys from database")
+        for key in peer_keys:
+            self.import_peer_key(key, persist=False)
+
+    def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
+        """
+        Import a new key into the keyring
+        """
         if self.key_already_in_keyring(peer_key.fingerprint):
             raise CannotImportSamePrimaryFingerprint
         else:
             self.logger.info(
                 f"Importing new public key: {peer_key.fingerprint}")
             self.keyring.load(peer_key)
+            if persist:
+                self.pds.save_key(peer_key)
             for k in peer_key.subkeys:
                 self.peer_subkey_map.update(
                     {k: peer_key.fingerprint})

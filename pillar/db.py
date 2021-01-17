@@ -75,24 +75,34 @@ class PillarDataStore:
             for fingerprint in keyring.fingerprints():
                 with keyring.key(fingerprint) as key:
                     self.add_key(key, session)
+                    self.logger.info(
+                        f"Storing key {key.fingerprint} in database")
+                    key_item = Key(fingerprint=key.fingerprint, key=bytes(key))
+                    session.add(key_item)
             session.commit()
         except Exception as e:
             session.rollback()
-            self.logger.error(f"Failed to update database keyring: {e}")
+            raise e
 
-    def add_key(self, key: PGPKey, session):
-        self.logger.info(f"Storing key {key.fingerprint} in database")
-        key_item = Key(fingerprint=key.fingerprint, key=bytes(key))
-        session.add(key_item)
+    def save_key(self, key: PGPKey,):
+        session = self.get_session()
+        try:
+            self.logger.info(f"Storing key {key.fingerprint} in database")
+            key_item = Key(fingerprint=key.fingerprint, key=bytes(key))
+            session.add(key_item)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
 
-    def load_keys(self):
+    def get_keys(self) -> list:
         session = self.get_session()
         keys = session.query(Key).all()
-        keyring = PGPKeyring()
+        deserialized_keys = []
         for key in keys:
-            pgpkey = PGPKey.from_blob(key.key)
-            keyring.load(pgpkey)
-        return keys
+            deserialized_key, other = PGPKey.from_blob(key.key)
+            deserialized_keys.append(deserialized_key)
+        return deserialized_keys
 
     def reinitialize_database(self):
         self.logger.info("Deleting database:")
@@ -110,18 +120,6 @@ class PillarDataStore:
         except Exception as e:
             self.logger.error(f"Could not add channel to datastore: {e}")
             session.rollback()
-
-    # def create_database_if_not_exist(self, purge=False):
-    #     if not self.database_exists() and not purge:
-    #         self.logger.info("No database found, creating database")
-    #         self.create_database()
-    #     elif self.database_exists() and purge:
-    #         self.logger.warn("Database found and --purge set, "
-    #                          "recreating database")
-    #         self.reinitialize_database()
-    #     else:
-    #         self.logger.info("Found existing database")
-    #         raise DatabaseExists
 
     def get_channels(self) -> list:
         session = self.get_session()

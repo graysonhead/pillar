@@ -71,7 +71,8 @@ class TestEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = Config()
-        self.km = KeyManager(self.config)
+        pds = MagicMock()
+        self.km = KeyManager(self.config, pds)
 
     def test_instantiate_keymanager_class(self):
         assert(isinstance(self.km, KeyManager))
@@ -81,7 +82,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key(self, *args):
-        self.km.import_peer_key('not_used')
+        self.km.import_peer_key_from_cid('not_used')
         self.km.get_key_message_by_cid.assert_called()
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
@@ -89,9 +90,9 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key_twice_raises_exception(self, *args):
-        self.km.import_peer_key('not_used')
+        self.km.import_peer_key_from_cid('not_used')
         with self.assertRaises(CannotImportSamePrimaryFingerprint):
-            self.km.import_peer_key('notacid')
+            self.km.import_peer_key_from_cid('notacid')
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey0)
@@ -116,8 +117,9 @@ class TestNonEmptyKeyManager(TestCase):
             new_callable=MagicMock)
     def setUp(self, *args):
         self.config = Config()
-        self.km = KeyManager(self.config)
-        self.km.import_peer_key('not_used')
+        pds = MagicMock()
+        self.km = KeyManager(self.config, pds)
+        self.km.import_peer_key_from_cid('not_used')
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey2)
@@ -155,7 +157,8 @@ class TestKeyManagerSubkeyGeneration(TestCase):
             new_callable=MagicMock)
     def setUp(self, *args):
         self.config = Config()
-        self.km = KeyManager(self.config)
+        pds = MagicMock()
+        self.km = KeyManager(self.config, pds)
         self.config.set_value('config_directory', '.unittestconfigdir')
         dir = self.config.get_value('config_directory')
         if not os.path.exists(dir):
@@ -180,3 +183,25 @@ class TestKeyManagerSubkeyGeneration(TestCase):
     def test_get_status_with_primary_key_present(self, *args):
         status = self.km.get_status()
         self.assertEqual(status, KeyManagerStatus.PRIMARY)
+
+
+class TestKeyManagerDBOperations(TestCase):
+    @patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
+    @patch('asyncio.get_event_loop', new_callable=MagicMock)
+    def setUp(self, *args):
+        self.config = Config()
+        pds = MagicMock()
+        self.km = KeyManager(self.config, pds)
+
+    @patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
+           new_callable=mock_pubkey0)
+    @patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
+           new_callable=MagicMock)
+    def test_import_peer_key_saves_to_database(self, *args):
+        self.km.import_peer_key_from_cid('not_used')
+        self.km.get_key_message_by_cid.assert_called()
+        self.km.pds.save_key.assert_called()
+
+    def test_import_peers_keys_from_database(self, *args):
+        self.km.import_peer_keys_from_database()
+        self.km.pds.get_keys.assert_called()
