@@ -50,3 +50,23 @@ class KeyTypeAlreadyPresent(Exception):
     have one. Same goes for the registration primary. Delete first, then
     proceed if that's what you want.
     """
+
+
+class InvalidKeyType(Exception):
+    """
+    Raised in cases when a pillar key type is given that is invalid in a given
+    situation. It's initial purpose is for preventing the use of a primary key
+    for encryption in the EncryptionHelper class.
+    """
+
+    def __init__(self, type):
+        super().__init__(f"Can't use key type {type}.")
+
+
+class WrongMessageType(Exception):
+    """
+    Raised when an unexpected IPRPCMessage type is recieved.
+    """
+
+    def __init__(self, type):
+        super().__init__(f"Wrong message type: {type}.")

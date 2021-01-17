@@ -7,7 +7,7 @@ import asyncio
 from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
-    MessageCouldNotBeVerified, KeyTypeAlreadyPresent
+    MessageCouldNotBeVerified, KeyTypeAlreadyPresent, InvalidKeyType
 from enum import Enum, Flag
 from uuid import uuid4
 import os
@@ -114,14 +114,18 @@ class KeyManager:
     def is_registered(self) -> bool:
         return self.get_status() != KeyManagerStatus.UNREGISTERED
 
+    def import_or_update_peer_key(self, cid):
+        try:
+            return self.import_peer_key(cid)
+        except CannotImportSamePrimaryFingerprint:
+            return self.update_peer_key(cid)
+
     def import_peer_key(self, cid):
         """
         Import a new key into the keyring
         """
         peer_key_message = self.get_key_message_by_cid(cid)
         peer_key, other = pgpy.PGPKey.from_blob(peer_key_message.message)
-        with open(f'pillar/tests/data/{cid}', 'w+') as f:
-            f.write(str(peer_key_message))
 
         if self.key_already_in_keyring(peer_key.fingerprint):
             raise CannotImportSamePrimaryFingerprint
@@ -145,13 +149,14 @@ class KeyManager:
         except KeyError:
             raise KeyNotInKeyring
         self.logger.info(
-            f"Importing peer key: {new_key.fingerprint}")
+            f"Updating peer key: {new_key.fingerprint}")
         if not self.this_key_is_newer(new_key):
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
             raise KeyNotVerified
 
         self.keyring.load(new_key)
+        return new_key.fingerprint
 
     def key_already_in_keyring(self, identifier) -> bool:
         try:
@@ -366,35 +371,22 @@ class EncryptionHelper:
     tasks that involve the use of pillar's other web of trust facilities
     """
 
-    def __init__(self, keymanager: KeyManager):
+    def __init__(self, keymanager: KeyManager, keytype: PillarKeyType):
         self.logger = logging.getLogger(f'[{self.__class__.__name__}]')
         self.key_manager = keymanager
+        self.keytype = keytype
+        if self.keytype == PillarKeyType.NODE_SUBKEY:
+            self.local_key = self.key_manager.node_subkey
+        elif self.keytype == PillarKeyType.USER_SUBKEY:
+            self.local_key = self.key_manager.user_subkey
+        elif self.keytype == PillarKeyType.REGISTRATION_PRIMARY_KEY:
+            self.local_key = self.key_manager.registration_primary_key
+        else:
+            raise InvalidKeyType(keytype)
 
-    def sign_and_encrypt_message_from_node_subkey_to_peer_fingerprint(
-            self, message: str, peer_fingerprint: str):
-        return self._sign_and_encrypt_string_from_local_to_remote(
-            message,
-            self.key_manager.node_subkey,
-            peer_fingerprint)
-
-    def sign_and_encrypt_string_from_user_subkey_to_peer_fingerprint(
-            self, message: str, peer_fingerprint: str):
-        return self._sign_and_encrypt_string_from_local_to_remote(
-            message,
-            self.key_manager.user_subkey,
-            peer_fingerprint)
-
-    def sign_and_encrypt_string_from_registration_key_to_peer_fingerprint(
-            self, message: str, peer_fingerprint: str):
-        return self._sign_and_encrypt_string_from_local_to_remote(
-            message,
-            self.key_manager.registration_primary_key,
-            peer_fingerprint)
-
-    def _sign_and_encrypt_string_from_local_to_remote(self,
-                                                      message: str,
-                                                      local: pgpy.PGPKey,
-                                                      remote_fingerprint: str):
+    def sign_and_encrypt_string_to_peer_fingerprint(self,
+                                                    message: str,
+                                                    remote_fingerprint: str):
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
         parent_fingerprint = self.key_manager.peer_subkey_map[remote_keyid]
@@ -406,31 +398,20 @@ class EncryptionHelper:
                     break
 
         message = pgpy.PGPMessage.new(message)
-        message |= local.sign(message)
-        self.logger.info(f'Ecrypted message for {peer_subkey.fingerprint}')
+        message |= self.local_key.sign(message)
+        self.logger.info(f'Encrypted message for {peer_subkey.fingerprint}')
         return peer_subkey.encrypt(message)
 
-    def decrypt_and_verify_pgp_to_node(self, encrypted_message: str):
-        return self._decrypt_and_verify_from_remote_to_local(
-            encrypted_message,
-            self.key_manager.node_subkey)
-
-    def decrypt_and_verify_pgp_to_user(self, encrypted_message: str):
-        return self._decrypt_and_verify_from_remote_to_local(
-            encrypted_message,
-            self.key_manager.user_subkey)
-
-    def decrypt_and_verify_pgp_to_registration(self, encrypted_message: str):
-        return self._decrypt_and_verify_from_remote_to_local(
-            encrypted_message,
-            self.key_manager.registration_primary_key)
-
-    def _decrypt_and_verify_from_remote_to_local(self,
-                                                 encrypted_message: str,
-                                                 local: pgpy.PGPKey):
-        unverified_message = local.decrypt(encrypted_message)
+    def decrypt_and_verify_encrypted_message(self,
+                                             encrypted_message: str,
+                                             verify: bool = True):
+        msg = pgpy.PGPMessage.from_blob(encrypted_message)
+        unverified_message = self.local_key.decrypt(msg)
         self.logger.info(
             f'Decrypted message from {unverified_message.signers}')
+        if not verify:
+            return unverified_message
+
         signer = unverified_message.signers.pop()
         signer_parent = self.key_manager.peer_subkey_map[signer]
         with self.key_manager.keyring.key(signer_parent) as peer_pubkey:
