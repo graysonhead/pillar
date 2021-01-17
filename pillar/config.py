@@ -54,10 +54,10 @@ class Config:
     """
     options = [
         ConfigOption(
-            'db_path',
+            'db_uri',
             [str],
-            default_value='/var/lib/pillar/pillar.db',
-            description="Filesystem path where the sqlite database is located"
+            default_value='sqlite:////var/lib/pillar/pillar.db',
+            description="URI of database"
         ),
         ConfigOption(
             'ipfs_url',
@@ -147,11 +147,14 @@ class Config:
             return_dict.update({option.attribute: option.get()})
         return return_dict
 
-    def generate_default(self, path: str) -> None:
+    def generate_config(self, path: str) -> None:
+        with open(path, 'w') as file:
+            file.write(self.generate_yaml())
+
+    def generate_yaml(self) -> str:
         default_option_dict = {}
         for option in self.options:
             default_option_dict.update(
-                {option.attribute: option.default_value}
+                {option.attribute: option.get()}
             )
-        with open(path, 'w') as file:
-            file.write(yaml.dump(default_option_dict))
+        return yaml.dump(default_option_dict)

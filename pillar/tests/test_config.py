@@ -136,9 +136,9 @@ class TestConfigWriteDefaultOptions(TestCase):
         Config.options = self.original_options
         os.remove(self.file_path)
 
-    def test_write_defaults_to_file(self):
-        self.config.generate_default(self.file_path)
+    def test_write_values_to_file(self):
+        self.config.generate_config(self.file_path)
         with open(self.file_path, 'r') as file:
             result = yaml.load(file, Loader=yaml.FullLoader)
 
-        self.assertEqual({'test_option': 'default_value'}, result)
+        self.assertEqual({'test_option': 'a_value'}, result)

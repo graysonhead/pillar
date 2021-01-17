@@ -199,6 +199,18 @@ class KeyManager:
         except FileNotFoundError:
             raise KeyTypeNotPresent
 
+    def delete_local_keys(self):
+        self.logger.info("Deleting local keys")
+        for key_type in PillarKeyType:
+            try:
+                os.remove(os.path.join(
+                    self.config.get_value('config_directory'),
+                    key_type.value
+                          )
+                          )
+            except FileNotFoundError:
+                pass
+
     def get_key_message_by_cid(self, cid: str) -> pgpy.PGPMessage:
         self.ensure_cid_content_present(cid)
         msg = pgpy.PGPMessage.from_file(
