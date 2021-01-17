@@ -7,7 +7,9 @@ from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import Config
+"""
 from .IPRPC.channel import IPRPCChannel
+"""
 from pgpy import PGPKeyring, PGPKey
 import logging
 
@@ -111,6 +113,8 @@ class PillarDataStore:
             self.pdb.engine.execute(tbl.delete())
         self.create_database()
 
+    """
+
     def add_channel(self, channel: IPRPCChannel):
         new_row = Channel(queue_id=channel.queue_id)
         session = self.get_session()
@@ -128,3 +132,5 @@ class PillarDataStore:
         except Exception as e:
             self.logger.error(f"Could not get list of channels from "
                               f"datastore: {e}")
+
+    """

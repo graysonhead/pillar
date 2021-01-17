@@ -7,7 +7,7 @@ from .messages import IPRPCMessage, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
     PeeringKeepalive
-from ..keymanager import EncryptionHelper
+from ..encryption_helper import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 import time

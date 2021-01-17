@@ -2,6 +2,7 @@ from pprint import pprint
 from pillar.config import Config
 from pillar.keymanager import KeyManager, EncryptionHelper, PillarKeyType
 from pillar.identity import User, Node
+from pillar.db import PillarDataStore
 from pprint import pprint
 import os
 import shutil
@@ -27,8 +28,11 @@ class ContrivedInstance:
         self.config = Config()
         self.config.set_value('config_directory', test_dir)
         self.config.set_value('ipfs_directory', os.path.join(test_dir, 'ipfs'))
+        self.config.set_value('db_uri', 'sqlite:///' + test_dir + 'pillar.db')
 
-        self.key_manager = KeyManager(self.config)
+        self.ds = PillarDataStore(self.config)
+        self.ds.create_database()
+        self.key_manager = KeyManager(self.config, self.ds)
         self.user = User(self.key_manager, self.config)
         self.user.bootstrap(name, email)
 

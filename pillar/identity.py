@@ -80,7 +80,7 @@ class LocalIdentity:
         invitation = CIDMessage(
             self.encryption_helper,
             self.config).get_and_decrypt_message_from_cid(cid, verify=False)
-        peer_fingerprint = self.key_manager.import_peer_key(
+        peer_fingerprint = self.key_manager.import_peer_key_from_cid(
             invitation.public_key_cid)
         if not type(invitation) is InvitationMessage:
             raise WrongMessageType(type(invitation))
