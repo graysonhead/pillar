@@ -7,6 +7,7 @@ from .messages import IPRPCMessage, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
     PeeringKeepalive
+from ..keymanager import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 import time
@@ -23,11 +24,15 @@ class IPRPCChannel(Process):
     def __init__(self,
                  id: str,
                  ipfs_queue_id: str,
+                 peer_fingerprint: str = None,
+                 encryption_helper: EncryptionHelper = None,
                  ipfs_instance: IPFSClient = None,
                  keepalive_send_interval: int = 30,
                  keepalive_timeout_interval: int = 60):
         self.id = id
         self.queue_id = ipfs_queue_id
+        self.peer_fingerprint = peer_fingerprint
+        self.encryption_helper = encryption_helper
         self.peer_id = None
         self.ipfs = ipfs_instance or IPFSClient()
         self.our_ipfs_peer_id = None
@@ -123,7 +128,7 @@ class IPRPCChannel(Process):
                 self._change_peering_status(PeeringStatus.ESTABLISHED)
             elif type(rx_message) is PeeringKeepalive:
                 self.timeout = time.time() + \
-                               self.keepalive_timeout_interval
+                    self.keepalive_timeout_interval
             else:
                 self.rx_input.send(rx_message)
 

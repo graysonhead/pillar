@@ -1,6 +1,6 @@
 from pprint import pprint
 from pillar.config import Config
-from pillar.keymanager import KeyManager, EncryptionHelper
+from pillar.keymanager import KeyManager, EncryptionHelper, PillarKeyType
 from pillar.identity import User, Node
 from pprint import pprint
 import os
@@ -29,7 +29,7 @@ class ContrivedInstance:
         self.config.set_value('ipfs_directory', os.path.join(test_dir, 'ipfs'))
 
         self.key_manager = KeyManager(self.config)
-        self.user = User(self.key_manager)
+        self.user = User(self.key_manager, self.config)
         self.user.bootstrap(name, email)
 
 
@@ -52,21 +52,23 @@ for k, v in instance_b.key_manager.user_primary_key.subkeys.items():
     time.sleep(5)
     print('importing keys')
     instance_a.key_manager.import_peer_key(
-        instance_b.key_manager.latest_pubkey_cid)
+        instance_b.key_manager.user_primary_key_cid)
     instance_b.key_manager.import_peer_key(
-        instance_a.key_manager.latest_pubkey_cid)
+        instance_a.key_manager.user_primary_key_cid)
 
-    encryption_helper_a = EncryptionHelper(instance_a.key_manager)
-    encryption_helper_b = EncryptionHelper(instance_b.key_manager)
+    encryption_helper_a = EncryptionHelper(
+        instance_a.key_manager, PillarKeyType.USER_SUBKEY)
+    encryption_helper_b = EncryptionHelper(
+        instance_b.key_manager, PillarKeyType.USER_SUBKEY)
 
     user_a_message = "Pillar is the best cloud!"
 
     crypt_message_a = encryption_helper_a.\
-        sign_and_encrypt_string_from_user_subkey_to_peer_fingerprint(
+        sign_and_encrypt_string_to_peer_fingerprint(
             user_a_message,
             peer_b_user_subkey_fingerprint)
 
-    decrypted_message = encryption_helper_b.decrypt_and_verify_pgp_to_user(
+    decrypted_message = encryption_helper_b.decrypt_and_verify_encrypted_message(
         crypt_message_a)
 
     print(decrypted_message)
@@ -76,9 +78,9 @@ time.sleep(5)
 instance_b.key_manager.generate_local_node_subkey()
 
 instance_a.key_manager.update_peer_key(
-    instance_b.key_manager.latest_pubkey_cid)
+    instance_b.key_manager.user_primary_key_cid)
 time.sleep(5)
 instance_b.key_manager.generate_local_node_subkey()
 
 instance_a.key_manager.update_peer_key(
-    instance_b.key_manager.latest_pubkey_cid)
+    instance_b.key_manager.user_primary_key_cid)
