@@ -1,12 +1,14 @@
 from sqlalchemy import create_engine, \
     Column, \
     Integer, \
-    String
+    String, \
+    BLOB
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import Config
 from .IPRPC.channel import IPRPCChannel
+from pgpy import PGPKeyring, PGPKey
 import logging
 
 Base = declarative_base()
@@ -20,6 +22,12 @@ class Channel(Base):
     __tablename__ = 'channels'
     id = Column(Integer, primary_key=True)
     queue_id = Column(String(120))
+
+
+class Key(Base):
+    __tablename__ = 'keys'
+    fingerprint = Column(String(120), primary_key=True)
+    key = Column(BLOB())
 
 
 class PillarDB:
@@ -60,6 +68,31 @@ class PillarDataStore:
                 self.reinitialize_database()
             else:
                 self.create_database()
+
+    def store_keyring(self, keyring: PGPKeyring):
+        session = self.get_session()
+        try:
+            for fingerprint in keyring.fingerprints():
+                with keyring.key(fingerprint) as key:
+                    self.add_key(key, session)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to update database keyring: {e}")
+
+    def add_key(self, key: PGPKey, session):
+        self.logger.info(f"Storing key {key.fingerprint} in database")
+        key_item = Key(fingerprint=key.fingerprint, key=bytes(key))
+        session.add(key_item)
+
+    def load_keys(self):
+        session = self.get_session()
+        keys = session.query(Key).all()
+        keyring = PGPKeyring()
+        for key in keys:
+            pgpkey = PGPKey.from_blob(key.key)
+            keyring.load(pgpkey)
+        return keys
 
     def reinitialize_database(self):
         self.logger.info("Deleting database:")

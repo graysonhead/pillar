@@ -5,7 +5,9 @@ import logging
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager
 from pillar.bootstrap import Bootstrapper
+from pillar.daemon import PillarDaemon
 from pathlib import Path
+import sys
 
 
 class CLI:
@@ -19,11 +21,19 @@ class CLI:
             self.config = self.get_config(self.args.config)
             self.pds = PillarDataStore(self.config)
             self.key_manager = KeyManager(self.config)
-            self.user = None
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
             self.bootstrap()
+        elif self.args.sub_command == 'daemon':
+            daemon = PillarDaemon(
+                self.config,
+                self.key_manager
+            )
+            daemon.run()
+        else:
+            print("No subcommand provided")
+            sys.exit(1)
 
     def bootstrap(self):
         bootstrap = Bootstrapper(
@@ -35,7 +45,15 @@ class CLI:
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers(dest="sub_command")
         bootstrap = subparsers.add_parser("bootstrap",
-                                          help="Bootstrap a pillar node")
+                                          help="Bootstrap a pillar node",
+                                          )
+        subparsers.add_parser("daemon",
+                              help="Run pillar daemon")
+        key = subparsers.add_parser("key",
+                                    help="Manage keys")
+        key.add_argument("--import-cid",
+                         help="Imports the key from an IPFS CID",
+                         type=str)
         bootstrap.add_argument("--purge",
                                help="Removes and re-creates databases and"
                                     " config files.",
