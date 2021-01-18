@@ -13,6 +13,7 @@ from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 import time
 import pgpy
+import hashlib
 
 
 class PeeringStatus(Enum):
@@ -178,10 +179,6 @@ class IPRPCChannel(Process):
             f"status={self.status.name}>"
 
 
-def hash_magic(*args):
-    return ["SECRET_CHANNEL"]
-
-
 class ChannelManager:
     def __init__(self,
                  encryption_helper: EncryptionHelper,
@@ -191,15 +188,32 @@ class ChannelManager:
         self.encryption_helper = encryption_helper
         self.channels = []
 
+    @staticmethod
+    def get_channel_id(*fingerprints,
+                       preshared_key: str = '',
+                       quantity: int = 1):
+        fingerprint_list = []
+        for fingerprint in fingerprints:
+            fingerprint_list.append(fingerprint)
+        fingerprint_list.sort()
+        string = '-'.join(fingerprint_list)
+        string = string + preshared_key
+        chan_list = []
+        for num in range(quantity):
+            chan_str = string + str(num)
+            chan_hash = hashlib.sha256(chan_str.encode('utf-8'))
+            chan_list.append(chan_hash.hexdigest())
+        return chan_list
+
     def add_peer(self, public_key: pgpy.PGPKey, invitation: InvitationMessage):
         self.logger.info(f'Adding peer: {public_key.fingerprint}')
         for fingerprint, subkey in public_key.subkeys.items():
-            queue_id_list = hash_magic(
+            queue_id_list = self.get_channel_id(
                 self.local_fingerprint,
                 subkey.fingerprint,
-                invitation.preshared_key,
-                invitation.channels_per_peer,
-                invitation.channel_rotation_period)
+                preshared_key=invitation.preshared_key,
+                quantity=invitation.channels_per_peer
+            )
             for queue_id in queue_id_list:
                 self.channels.append(
                     IPRPCChannel(

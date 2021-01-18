@@ -1,13 +1,10 @@
-from pprint import pprint
 from pillar.config import Config
-from pillar.keymanager import KeyManager, EncryptionHelper, PillarKeyType
-from pillar.identity import User, Node
+from pillar.keymanager import KeyManager
+from pillar.identity import User
 from pillar.db import PillarDataStore
-from pprint import pprint
 import os
 import shutil
 import logging
-import time
 
 
 def remove_directories_idempotently():
@@ -28,7 +25,7 @@ class ContrivedInstance:
         self.config = Config()
         self.config.set_value('config_directory', test_dir)
         self.config.set_value('ipfs_directory', os.path.join(test_dir, 'ipfs'))
-        self.config.set_value('db_uri', 'sqlite:///' + test_dir + 'pillar.db')
+        self.config.set_value('db_path', test_dir + 'pillar.db')
 
         self.ds = PillarDataStore(self.config)
         self.ds.create_database()

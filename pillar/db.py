@@ -2,10 +2,11 @@ from sqlalchemy import create_engine, \
     Column, \
     Integer, \
     String, \
-    BLOB
+    BLOB, \
+    ForeignKey
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from .config import Config
 from pgpy import PGPKeyring, PGPKey
 import logging
@@ -27,6 +28,14 @@ class Key(Base):
     __tablename__ = 'keys'
     fingerprint = Column(String(120), primary_key=True)
     key = Column(BLOB())
+    invitation_id = Column(Integer, ForeignKey('invitations.id'))
+    invitation = relationship("Invitation", back_populates='key')
+
+
+class Invitation(Base):
+    __tablename__ = 'invitations'
+    id = Column(Integer, primary_key=True)
+    key = relationship("Key", uselist=False, back_populates='invitation')
 
 
 class PillarDB:
@@ -35,9 +44,13 @@ class PillarDB:
     """
 
     def __init__(self, config: Config):
-        self.db_uri = config.get_value('db_uri')
+        self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
+
+    def _get_sqlite_uri(self, path: str):
+        absolute_path = path
+        return f"sqlite:///{absolute_path}"
 
     def _get_engine(self, uri: str):
         return create_engine(uri)

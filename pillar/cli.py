@@ -60,7 +60,7 @@ class CLI:
                                     " config files.",
                                action='store_true')
         parser.add_argument("--config",
-                            default='/etc/pillar/pillar.yaml')
+                            default='~/.pillar/pillar.yaml')
         parser.add_argument("--verb",
                             default="WARNING",
                             choices=["INFO", "DEBUG", "WARNING"])

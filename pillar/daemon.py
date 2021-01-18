@@ -1,5 +1,6 @@
 from pillar.keymanager import KeyManager
 from pillar.config import Config
+from pillar.identity import User, Node
 
 
 class PillarDaemon:
@@ -11,4 +12,7 @@ class PillarDaemon:
         self.key_manager = key_manager
 
     def run(self):
-        pass
+        user = User(self.key_manager, self.config)
+        node = Node(self.key_manager, self.config)
+        print(user)
+        print(node)

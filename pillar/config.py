@@ -1,4 +1,5 @@
 import yaml
+from pathlib import PosixPath
 
 UNSET = object
 
@@ -26,11 +27,17 @@ class ConfigOption:
                 self.example = default_value
         self.value = UNSET
 
+    def _parse_poisx_path(self, path: str):
+        return PosixPath(path).expanduser()
+
     def set(self, value=None) -> None:
         if not value:
-            self.value = self.default_value
+            if PosixPath in self.valid_types:
+                self.value = self._parse_poisx_path(self.default_value)
         else:
-            if type(value) in self.valid_types:
+            if PosixPath in self.valid_types:
+                self.value = self._parse_poisx_path(value)
+            elif type(value) in self.valid_types:
                 self.value = value
             else:
                 raise TypeError(f"Option {self.attribute} cannot accept value "
@@ -39,6 +46,7 @@ class ConfigOption:
 
     def get(self):
         if self.value == UNSET:
+            self.set()
             return self.default_value
         else:
             return self.value
@@ -54,10 +62,10 @@ class Config:
     """
     options = [
         ConfigOption(
-            'db_uri',
-            [str],
-            default_value='sqlite:////var/lib/pillar/pillar.db',
-            description="URI of database"
+            'db_path',
+            [PosixPath],
+            default_value='~/.pillar/pillar.db',
+            description="Path of SQLite database"
         ),
         ConfigOption(
             'ipfs_url',
@@ -67,20 +75,15 @@ class Config:
         ),
         ConfigOption(
             'config_directory',
-            [str],
-            default_value="/etc/pillar",
+            [PosixPath],
+            default_value="~/.pillar",
             description="Path of Pillar configuration directory"
         ),
         ConfigOption(
             'ipfs_directory',
-            [str],
-            default_value="/var/lib/pillar/ipfs",
+            [PosixPath],
+            default_value="~/.pillar/ipfs",
             description="Filesystem path where ipfs content is downloaded."
-        ),
-        ConfigOption(
-            'public_key_path',
-            [str],
-            default_value="/etc/pillar/key.pub"
         ),
         ConfigOption(
             'default_key_type',

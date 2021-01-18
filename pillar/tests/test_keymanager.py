@@ -70,7 +70,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = Config()
+        self.config = Config(config_directory="/this/shouldnt/exist")
         pds = MagicMock()
         self.km = KeyManager(self.config, pds)
 

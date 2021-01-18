@@ -62,7 +62,7 @@ class KeyManager:
     the keyring used to validate and encrypt messages to peers.
     """
 
-    def __init__(self, config: Config, pds: PillarDataStore):
+    def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
         self.keyring = pgpy.PGPKeyring()
         self.ipfs = IPFSClient()
@@ -80,7 +80,8 @@ class KeyManager:
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
         self.node_uuid = None
-        self.import_peer_keys_from_database()
+        if db_import:
+            self.import_peer_keys_from_database()
 
     def get_status(self) -> KeyManagerStatus:
         present_keys = 0x0

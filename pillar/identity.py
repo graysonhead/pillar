@@ -74,7 +74,7 @@ class LocalIdentity:
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
             public_key_cid=self.key_manager.user_primary_key_cid,
-            fingerprint=self.fingerprint)
+            fingerprint=str(self.fingerprint))
         return CIDMessenger(
             self.encryption_helper,
             self.config).add_unencrypted_message_to_ipfs(message)

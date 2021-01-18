@@ -46,14 +46,14 @@ class Bootstrapper:
         if pds.database_exists():
             if not self.args.purge:
                 raise FileExistsError(
-                    f"Database {self.config.get_value('db_uri')} already "
+                    f"Database {self.config.get_value('db_path')} already "
                     f"exists. Run with --purge to re-initialize "
                     f"it")
             step = f"Delete and reinitialize database " \
-                f"{self.config.get_value('db_uri')}"
+                f"{self.config.get_value('db_path')}"
         else:
             step = f"Create and initialize database " \
-                f"{self.config.get_value('db_uri')}"
+                f"{self.config.get_value('db_path')}"
         self.planned_steps.append(step)
         return pds
 
@@ -63,7 +63,7 @@ class Bootstrapper:
         print("Database created")
 
     def bootstrap_keymanager_pre(self):
-        keymanager = KeyManager(self.config)
+        keymanager = KeyManager(self.config, self.pds, db_import=False)
         if keymanager.is_registered():
             if not self.args.purge:
                 raise FileExistsError(
@@ -111,10 +111,10 @@ class Bootstrapper:
         return keymanager
 
     def bootstrap_keymanager_exec(self):
-        self.user = User(self.key_manager)
+        self.user = User(self.key_manager, self.config)
         self.user.bootstrap(self.user_key_name, self.user_key_email)
         if self.bootstrap_node_subkey:
-            self.node = Node(self.key_manager)
+            self.node = Node(self.key_manager, self.config)
             self.node.bootstrap()
 
     def bootstrap_execute(self):
