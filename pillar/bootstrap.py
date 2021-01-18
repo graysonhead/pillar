@@ -129,7 +129,7 @@ class Bootstrapper:
 
     def bootstrap_config_file_pre(self) -> tuple:
         if self.args.config:
-            config_location = self.args.config
+            config_location = Path(self.args.config).expanduser()
         else:
             config_location = "/etc/pillar/pillar.yaml"
         config_path = Path(config_location)
