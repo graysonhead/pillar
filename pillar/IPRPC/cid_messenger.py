@@ -12,7 +12,7 @@ class CIDMessenger:
     def __init__(self,
                  encryption_helper: EncryptionHelper,
                  config: Config):
-        self.logger = logging.getLogger('[CIDMessage]')
+        self.logger = logging.getLogger('<CIDMessenger>')
         self.encryption_helper = encryption_helper
         self.config = config
         self.ipfs = IPFSClient()

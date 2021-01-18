@@ -402,7 +402,7 @@ class EncryptionHelper:
     """
 
     def __init__(self, keymanager: KeyManager, keytype: PillarKeyType):
-        self.logger = logging.getLogger(f'[{self.__class__.__name__}]')
+        self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.key_manager = keymanager
         self.keytype = keytype
         if self.keytype == PillarKeyType.NODE_SUBKEY:

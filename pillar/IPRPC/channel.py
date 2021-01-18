@@ -186,7 +186,7 @@ class ChannelManager:
     def __init__(self,
                  encryption_helper: EncryptionHelper,
                  local_fingerprint: str):
-        self.logger = logging.getLogger('[ChannelManager]')
+        self.logger = logging.getLogger('<ChannelManager>')
         self.local_fingerprint = local_fingerprint
         self.encryption_helper = encryption_helper
         self.channels = []

@@ -82,7 +82,7 @@ class LocalIdentity:
 
 class Node(LocalIdentity):
     def __init__(self, *args, **kwargs):
-        self.logger = logging.getLogger('[Node]')
+        self.logger = logging.getLogger('<Node>')
         self.key_type = PillarKeyType.NODE_SUBKEY
         super().__init__(*args, **kwargs)
 
@@ -100,7 +100,7 @@ class Node(LocalIdentity):
 
 class User(LocalIdentity):
     def __init__(self, *args, **kwargs):
-        self.logger = logging.getLogger('[User]')
+        self.logger = logging.getLogger('<User>')
         self.key_type = PillarKeyType.USER_SUBKEY
         super().__init__(*args, **kwargs)
 
