@@ -107,3 +107,17 @@ class PeeringHelloResponse(IPRPCMessage):
 @IPRPCRegistry.register_rpc_call
 class PeeringKeepalive(IPRPCMessage):
     attributes = {}
+
+
+@IPRPCRegistry.register_rpc_call
+class FingerprintMessage(IPRPCMessage):
+    attributes = {"public_key_cid": str,
+                  "fingerprint": str}
+
+
+@IPRPCRegistry.register_rpc_call
+class InvitationMessage(IPRPCMessage):
+    attributes = {"public_key_cid": str,
+                  "preshared_key": str,
+                  "channels_per_peer": int,
+                  "channel_rotation_period": int}

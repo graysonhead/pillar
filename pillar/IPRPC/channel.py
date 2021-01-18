@@ -2,15 +2,17 @@ import asyncio
 import logging
 from enum import Enum
 from urllib.parse import unquote
-from .messages import IPRPCMessage, \
+from .messages import IPRPCMessage,\
     PeeringHello, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
-    PeeringKeepalive
+    PeeringKeepalive,\
+    InvitationMessage
 from ..encryption_helper import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 import time
+import pgpy
 
 
 class PeeringStatus(Enum):
@@ -174,3 +176,33 @@ class IPRPCChannel(Process):
         return f"<{self.__class__.__name__}:queue_id={self.queue_id}," \
             f"peer_id={self.peer_id}," \
             f"status={self.status.name}>"
+
+
+def hash_magic(*args):
+    return ["SECRET_CHANNEL"]
+
+
+class ChannelManager:
+    def __init__(self,
+                 encryption_helper: EncryptionHelper,
+                 local_fingerprint: str):
+        self.logger = logging.getLogger('[ChannelManager]')
+        self.local_fingerprint = local_fingerprint
+        self.encryption_helper = encryption_helper
+        self.channels = []
+
+    def add_peer(self, public_key: pgpy.PGPKey, invitation: InvitationMessage):
+        self.logger.info(f'Adding peer: {public_key.fingerprint}')
+        for fingerprint, subkey in public_key.subkeys.items():
+            queue_id_list = hash_magic(
+                self.local_fingerprint,
+                subkey.fingerprint,
+                invitation.preshared_key,
+                invitation.channels_per_peer,
+                invitation.channel_rotation_period)
+            for queue_id in queue_id_list:
+                self.channels.append(
+                    IPRPCChannel(
+                        queue_id,
+                        self.local_fingerprint,
+                        self.encryption_helper))
