@@ -169,7 +169,10 @@ class Config:
     def generate_yaml(self) -> str:
         default_option_dict = {}
         for option in self.options:
+            option_value = option.get()
+            if PosixPath in option.valid_types:
+                option_value = str(option.get())
             default_option_dict.update(
-                {option.attribute: option.get()}
+                {option.attribute: option_value}
             )
         return yaml.dump(default_option_dict)
