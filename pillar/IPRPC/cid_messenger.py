@@ -8,7 +8,7 @@ import os
 import asyncio
 
 
-class CIDMessage:
+class CIDMessenger:
     def __init__(self,
                  encryption_helper: EncryptionHelper,
                  config: Config):
