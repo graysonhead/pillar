@@ -19,7 +19,7 @@ class CIDMessage:
         self.loop = asyncio.get_event_loop()
 
     def get_and_decrypt_message_from_cid(self, cid: str, verify: bool = True):
-        self.logger.info(f'Retreiveing encrypted message: {cid}')
+        self.logger.info(f'Retrieving encrypted message: {cid}')
         encrypted_message = self._get_cid_contents(cid)
         message = self.encryption_helper.\
             decrypt_and_verify_encrypted_message(
@@ -28,7 +28,7 @@ class CIDMessage:
         return IPRPCRegistry.deserialize_from_json(message_contents.message)
 
     def get_unencrypted_message_from_cid(self, cid: str):
-        self.logger.info(f'Retreiveing unencrypted message: {cid}')
+        self.logger.info(f'Retrieving unencrypted message: {cid}')
         message = self._get_cid_contents(cid)
         return IPRPCRegistry.deserialize_from_json(message)
 
