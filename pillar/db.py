@@ -7,6 +7,8 @@ from sqlalchemy import create_engine, \
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.properties import ColumnProperty
 from .config import Config
 from pgpy import PGPKeyring, PGPKey
 import logging
@@ -81,6 +83,15 @@ class PillarDataStore:
             else:
                 self.create_database()
 
+    def store_instance(self, model_instance):
+        with self.get_session() as session:
+            try:
+                session.add(model_instance)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                raise e
+
     def store_keyring(self, keyring: PGPKeyring):
         session = self.get_session()
         try:
@@ -116,9 +127,37 @@ class PillarDataStore:
             deserialized_keys.append(deserialized_key)
         return deserialized_keys
 
+    def load_model_instance(self, model_class, filter_attribs):
+        with self.get_session() as session:
+            return session.query(model_class).filter(**filter_attribs).one()
+
     def reinitialize_database(self):
         self.logger.info("Deleting database:")
         for tbl in reversed(Base.metadata.sorted_tables):
             self.logger.info(f"Deleted table {tbl}")
             self.pdb.engine.execute(tbl.delete())
         self.create_database()
+
+
+class PillarDatastoreMixIn:
+    model = None
+
+    def _pds_get_model_instance(self):
+        attribute_dict = {}
+        for attrib in self._pds_get_attributes():
+            attribute_dict.update(
+                {attrib.name: getattr(self, attrib.name)})
+        return self.model(**attribute_dict)
+
+    def _pds_get_attributes(self):
+        attribs = []
+        for attrib_name in dir(self.model):
+            attribute = getattr(self.model, attrib_name)
+            if isinstance(attribute, InstrumentedAttribute):
+                if isinstance(attribute.prop, ColumnProperty):
+                    attribs.append(attribute)
+        return attribs
+
+    def pds_save(self, pds: PillarDataStore):
+        model_instance = self._pds_get_model_instance()
+        pds.store_instance(model_instance)
