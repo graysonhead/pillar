@@ -29,7 +29,8 @@ class CLI:
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
                 self.config,
-                self.key_manager
+                self.key_manager,
+                self.pds
             )
             daemon.run()
         else:

@@ -68,12 +68,14 @@ class TestParentClass(PillarDatastoreMixIn):
 class TestPillarDatastoreMixIn(TestCase):
 
     def setUp(self) -> None:
-        test_args = {"test_int": 4, "test_str": "hi", "unrelated_attrib": "yo"}
-        self.test_class = TestClass(**test_args)
+        self.test_args = {"test_int": 4,
+                          "test_str": "hi",
+                          "unrelated_attrib": "yo"}
+        self.test_class = TestClass(**self.test_args)
         self.pds = MagicMock()
 
     def test_generate_model_instance(self):
-        model_object = self.test_class._pds_get_model_instance()
+        model_object = self.test_class._pds_generate_model()
         self.assertEqual(TestModel, type(model_object))
         self.assertEqual(4, model_object.test_int)
         with self.assertRaises(AttributeError):
@@ -91,5 +93,5 @@ class TestPillarDatastoreMixInRelationships(TestCase):
         self.pds = MagicMock()
 
     def test_pds_save(self):
-        model_object = self.test_parent._pds_get_model_instance()
+        model_object = self.test_parent._pds_generate_model()
         self.assertEqual("hello", model_object.some_string)

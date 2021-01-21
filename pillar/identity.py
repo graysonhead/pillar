@@ -6,6 +6,7 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
+from .db import PillarDatastoreMixIn, UserIdentity
 import logging
 
 
@@ -20,7 +21,6 @@ class LocalIdentity:
         self.encryption_helper = EncryptionHelper(
             self.key_manager, self.key_type)
         self.channel_manager = None
-        self.start_channel_manager()
 
     def start_channel_manager(self):
         if self.channel_manager is None:
@@ -80,7 +80,7 @@ class LocalIdentity:
             self.config).add_unencrypted_message_to_ipfs(message)
 
 
-class Node(LocalIdentity):
+class Node(PillarDatastoreMixIn, LocalIdentity):
     def __init__(self, *args, **kwargs):
         self.logger = logging.getLogger('<Node>')
         self.key_type = PillarKeyType.NODE_SUBKEY
@@ -98,10 +98,19 @@ class Node(LocalIdentity):
             f'Bootstrapped Node with fingerprint: {self.fingerprint}')
 
 
-class User(LocalIdentity):
-    def __init__(self, *args, **kwargs):
+class User(PillarDatastoreMixIn, LocalIdentity):
+    model = UserIdentity
+
+    def __init__(self, *args,
+                 id: int = None,
+                 fingerprint: str = None,
+                 fingerprint_cid: str = None,
+                 **kwargs):
+        self.id = id
         self.logger = logging.getLogger('<User>')
         self.key_type = PillarKeyType.USER_SUBKEY
+        self.fingerprint = fingerprint
+        self.fingerprint_cid = fingerprint_cid
         super().__init__(*args, **kwargs)
 
     def bootstrap(self, name, email):

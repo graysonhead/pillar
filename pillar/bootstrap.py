@@ -113,6 +113,7 @@ class Bootstrapper:
     def bootstrap_keymanager_exec(self):
         self.user = User(self.key_manager, self.config)
         self.user.bootstrap(self.user_key_name, self.user_key_email)
+        self.user.pds_save(self.pds)
         if self.bootstrap_node_subkey:
             self.node = Node(self.key_manager, self.config)
             self.node.bootstrap()
