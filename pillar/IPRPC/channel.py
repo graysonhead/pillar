@@ -6,8 +6,7 @@ from .messages import IPRPCMessage,\
     PeeringHello, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
-    PeeringKeepalive,\
-    InvitationMessage
+    PeeringKeepalive
 from ..encryption_helper import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
@@ -187,6 +186,7 @@ class ChannelManager:
         self.local_fingerprint = local_fingerprint
         self.encryption_helper = encryption_helper
         self.channels = []
+        self.pipes = {}
 
     @staticmethod
     def get_channel_id(*fingerprints,
@@ -205,18 +205,23 @@ class ChannelManager:
             chan_list.append(chan_hash.hexdigest())
         return chan_list
 
-    def add_peer(self, public_key: pgpy.PGPKey, invitation: InvitationMessage):
+    def add_peer(self, public_key: pgpy.PGPKey):
         self.logger.info(f'Adding peer: {public_key.fingerprint}')
         for fingerprint, subkey in public_key.subkeys.items():
             queue_id_list = self.get_channel_id(
                 self.local_fingerprint,
                 subkey.fingerprint,
-                preshared_key=invitation.preshared_key,
-                quantity=invitation.channels_per_peer
             )
             for queue_id in queue_id_list:
-                self.channels.append(
-                    IPRPCChannel(
+                channel = IPRPCChannel(
+                        str(self.local_fingerprint),
                         queue_id,
-                        self.local_fingerprint,
-                        self.encryption_helper))
+                        str(fingerprint),
+                        encryption_helper=self.encryption_helper)
+                self.channels.append(channel)
+                self.pipes.update({str(fingerprint):
+                                  channel.get_pipe_endpoints()})
+
+    def start_channels(self):
+        for channel in self.channels:
+            channel.run()

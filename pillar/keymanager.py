@@ -395,6 +395,13 @@ class KeyManager:
         dequeue.append(val)
         return val
 
+    def get_keys(self):
+        keys = []
+        for fingerprint in self.keyring.fingerprints():
+            with self.keyring.key(fingerprint) as key:
+                keys.append(key)
+        return keys
+
 
 class EncryptionHelper:
     """

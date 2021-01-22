@@ -117,6 +117,7 @@ class Bootstrapper:
         if self.bootstrap_node_subkey:
             self.node = Node(self.key_manager, self.config)
             self.node.bootstrap()
+            self.node.pds_save(self.pds)
 
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()

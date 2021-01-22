@@ -1,7 +1,8 @@
 from pillar.keymanager import KeyManager
 from pillar.config import Config
-from pillar.identity import User
+from pillar.identity import User, Node
 from pillar.db import PillarDataStore
+import logging
 
 
 class PillarDaemon:
@@ -10,11 +11,26 @@ class PillarDaemon:
                  config: Config,
                  key_manager: KeyManager,
                  pds: PillarDataStore):
+        self.logger = logging.getLogger(self.__repr__())
         self.config = config
         self.key_manager = key_manager
         self.pds = pds
+        self.users = []
+        self.nodes = []
 
     def run(self):
-        users = User.load_all_from_db(self.pds,
-                                      init_args=[self.key_manager, self.pds])
-        print(users)
+        self.users = User.load_all_from_db(
+            self.pds,
+            init_args=[self.key_manager, self.config])
+        self.nodes = Node.load_all_from_db(
+            self.pds,
+            init_args=[self.key_manager, self.config])
+        primary_node = self.nodes[0]
+        primary_node.start_channel_manager()
+        primary_node.create_peer_channels()
+        primary_node.run()
+        self.logger.info(f"Loaded user identities: {self.users}")
+        self.logger.info(f"Loaded node identities: {self.nodes}")
+
+    def __repr__(self):
+        return "<PillarDaemon>"

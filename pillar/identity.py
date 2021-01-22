@@ -6,7 +6,7 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
-from .db import PillarDatastoreMixIn, UserIdentity
+from .db import PillarDatastoreMixIn, UserIdentity, NodeIdentity
 import logging
 
 
@@ -81,21 +81,41 @@ class LocalIdentity:
 
 
 class Node(PillarDatastoreMixIn, LocalIdentity):
-    def __init__(self, *args, **kwargs):
+    model = NodeIdentity
+
+    def __init__(self, *args,
+                 id: int = None,
+                 fingerprint: str = None,
+                 fingerprint_cid: str = None,
+                 **kwargs):
+        self.id = id
         self.logger = logging.getLogger('<Node>')
         self.key_type = PillarKeyType.NODE_SUBKEY
+        self.fingerprint = fingerprint
+        self.fingerprint_cid = fingerprint_cid
         super().__init__(*args, **kwargs)
+        self.encryption_helper = EncryptionHelper(
+            self.key_manager, self.key_type)
+
+    def __repr__(self):
+        return f"<Node: {self.fingerprint}>"
 
     def bootstrap(self):
         self.key_manager.generate_local_node_subkey()
         self.cid = self.key_manager.user_primary_key_cid
         self.fingerprint = self.key_manager.node_subkey.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
-        self.encryption_helper = EncryptionHelper(
-            self.key_manager, self.key_type)
+
         self.start_channel_manager()
         self.logger.info(
             f'Bootstrapped Node with fingerprint: {self.fingerprint}')
+
+    def create_peer_channels(self):
+        for key in self.key_manager.get_keys():
+            self.channel_manager.add_peer(key)
+
+    def run(self):
+        self.channel_manager.start_channels()
 
 
 class User(PillarDatastoreMixIn, LocalIdentity):
@@ -112,6 +132,9 @@ class User(PillarDatastoreMixIn, LocalIdentity):
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
         super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return f"<User: {self.fingerprint}>"
 
     def bootstrap(self, name, email):
         self.key_manager.generate_user_primary_key(name, email)

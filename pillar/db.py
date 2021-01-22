@@ -42,6 +42,14 @@ class UserIdentity(Base):
     fingerprint_cid = Column(String)
 
 
+class NodeIdentity(Base):
+    __tablename__ = "node_identities"
+    id = Column(Integer, primary_key=True)
+    cid = Column(String)
+    fingerprint = Column(String)
+    fingerprint_cid = Column(String)
+
+
 class Invitation(Base):
     __tablename__ = 'invitations'
     id = Column(Integer, primary_key=True)
