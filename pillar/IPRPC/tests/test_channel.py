@@ -1,4 +1,4 @@
-from ..channel import IPRPCChannel, PeeringStatus
+from ..channel import IPRPCChannel, PeeringStatus, generate_queue_id
 from ..messages import PeeringHello, \
     PeeringHelloResponse, \
     IPRPCMessage, \
@@ -283,3 +283,14 @@ class TestIPRPCChannel(asynctest.TestCase):
         self.assertEqual(test_message.serialize_to_json(),
                          message.serialize_to_json()
                          )
+
+
+class TestQueueIDGenerator(asynctest.TestCase):
+
+    def test_queue_id_different_order(self):
+        fingerprint_1 = '6A2F 421B D348 3324 C381  40DA 073B C320 0DEC 1B82'
+        fingerprint_2 = '8B1E 9C88 2414 2D5B D80C  C383 1E0B D385 940E 0713'
+
+        channel_id_1 = generate_queue_id(fingerprint_1, fingerprint_2)
+        channel_id_2 = generate_queue_id(fingerprint_2, fingerprint_1)
+        self.assertEqual(channel_id_1, channel_id_2)
