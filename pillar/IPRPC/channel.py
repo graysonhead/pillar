@@ -185,7 +185,7 @@ class IPRPCChannel(Process):
                 self.logger.warning(f"Decoding failed on message: {e}")
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}:queue_id={self.queue_id}," \
+        return f"<{self.__class__.__name__}:" \
             f"peer_id={self.peer_id}," \
             f"status={self.status.name}>"
 
