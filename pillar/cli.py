@@ -48,6 +48,10 @@ class CLI:
                 users[0].receive_invitation_by_cid(
                     self.args.invitation_cid
                 )
+            elif self.args.identity_command == 'show_fingerprints':
+                print("Local Fingerprints:")
+                print(f"User: {users[0].fingerprint}")
+                print(f"Peers: {users[0].key_manager.keyring.fingerprints()}")
         else:
             print("No subcommand provided")
             sys.exit(1)
@@ -82,6 +86,8 @@ class CLI:
             help="Accept the invitation of another user")
         accept_invitation.add_argument("invitation_cid",
                                        help="Accept a generated invitation")
+        keyparsers.add_parser("show_fingerprints",
+                              help="List all key fingerprints")
         bootstrap.add_argument("--purge",
                                help="Removes and re-creates databases and"
                                     " config files.",
