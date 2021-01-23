@@ -13,6 +13,7 @@ from multiprocessing import Process, Pipe
 import time
 import pgpy
 import hashlib
+from datetime import datetime, timedelta
 
 
 class PeeringStatus(Enum):
@@ -22,12 +23,17 @@ class PeeringStatus(Enum):
 
 
 def generate_queue_id(*fingerprints,
-                      preshared_key: str = ''):
+                      preshared_key: str = '',
+                      datetime: datetime = datetime.utcnow()):
     fingerprint_list = []
     for fingerprint in fingerprints:
         fingerprint_list.append(fingerprint)
     fingerprint_list.sort()
     string = '-'.join(fingerprint_list)
+    string = string + f"{datetime.year}-" \
+        f"{datetime.month}-" \
+        f"{datetime.day}-" \
+        f"{datetime.hour}"
     chan = string + preshared_key
     chan_hash = hashlib.sha256(chan.encode('utf-8'))
     return chan_hash.hexdigest()
@@ -44,7 +50,6 @@ class IPRPCChannel(Process):
                  keepalive_timeout_interval: int = 60):
         self.id = id
         self.peer_id = peer_fingerprint
-        self.queue_id = generate_queue_id(self.id, self.peer_id)
         self.encryption_helper = encryption_helper
         self.ipfs = ipfs_instance or IPFSClient()
         self.our_ipfs_peer_id = None
@@ -56,7 +61,7 @@ class IPRPCChannel(Process):
         self.timeout = None
         self.keepalive_send_timeout = None
         super().__init__()
-        self.logger = logging.getLogger(f"<IPRPCChannel:{self.queue_id}>")
+        self.logger = logging.getLogger(self.__repr__())
         self.logger.info(
             f"Spawned channel between {self.id} and {self.peer_id}")
 
@@ -78,7 +83,19 @@ class IPRPCChannel(Process):
         )
         asyncio.ensure_future(
             self._handler_loop(
-                self._handle_incoming_messages,
+                self._handle_messages_current_window,
+                sleep=.01
+            )
+        )
+        asyncio.ensure_future(
+            self._handler_loop(
+                self._handle_messages_previous_window,
+                sleep=.01
+            )
+        )
+        asyncio.ensure_future(
+            self._handler_loop(
+                self._handle_messages_next_window,
                 sleep=.01
             )
         )
@@ -131,8 +148,34 @@ class IPRPCChannel(Process):
             if not self.status == PeeringStatus.ESTABLISHING:
                 self._change_peering_status(PeeringStatus.IDLE)
 
-    async def _handle_incoming_messages(self):
-        async for rx_message in self._get_message():
+    async def _handle_messages_previous_window(self):
+        previous_queue_id = generate_queue_id(
+            self.id,
+            self.peer_id,
+            datetime=datetime.utcnow() - timedelta(hours=1)
+        )
+        await self._handle_incoming_messages(previous_queue_id)
+
+    async def _handle_messages_next_window(self):
+        next_queue_id = generate_queue_id(
+            self.id,
+            self.peer_id,
+            datetime=datetime.utcnow() + timedelta(hours=1)
+        )
+        await self._handle_incoming_messages(next_queue_id)
+
+    async def _handle_messages_current_window(self):
+        await self._handle_incoming_messages(self._get_current_queue_id())
+
+    def _get_current_queue_id(self):
+        return generate_queue_id(
+            self.id,
+            self.peer_id,
+            datetime=datetime.utcnow()
+        )
+
+    async def _handle_incoming_messages(self, queue_id: str):
+        async for rx_message in self._get_message(queue_id):
             if type(rx_message) is PeeringHello:
                 await self._send_message(
                     PeeringHelloResponse(responder_id=self.id)
@@ -164,19 +207,20 @@ class IPRPCChannel(Process):
         self.logger.info(f"Sent message: {call}")
 
     async def _send_ipfs(self, message: str) -> None:
-        await self.ipfs.send_pubsub_message(self.queue_id, message)
+        queue_id = self._get_current_queue_id()
+        await self.ipfs.send_pubsub_message(queue_id, message)
         self.logger.info(f"Sent raw message: {message}")
 
-    async def _get_from_ipfs(self):
+    async def _get_from_ipfs(self, queue_id: str):
         if not self.our_ipfs_peer_id:
             await self._set_our_ipfs_peer_id()
-        async for message in self.ipfs.get_pubsub_message(self.queue_id):
+        async for message in self.ipfs.get_pubsub_message(queue_id):
             if not message['from'].decode() == self.our_ipfs_peer_id:
                 raw_message = unquote(message['data'].decode('utf-8'))
                 yield raw_message
 
-    async def _get_message(self):
-        async for message in self._get_from_ipfs():
+    async def _get_message(self, queue_id: str):
+        async for message in self._get_from_ipfs(queue_id):
             try:
                 message = IPRPCRegistry.deserialize_from_json(message)
                 self.logger.info(f"Got message from peer: {message}")
