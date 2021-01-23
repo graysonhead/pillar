@@ -6,8 +6,7 @@ from .messages import IPRPCMessage,\
     PeeringHello, \
     PeeringHelloResponse, \
     IPRPCRegistry, \
-    PeeringKeepalive,\
-    InvitationMessage
+    PeeringKeepalive
 from ..encryption_helper import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
@@ -22,21 +21,31 @@ class PeeringStatus(Enum):
     ESTABLISHED = 3
 
 
+def generate_queue_id(*fingerprints,
+                      preshared_key: str = ''):
+    fingerprint_list = []
+    for fingerprint in fingerprints:
+        fingerprint_list.append(fingerprint)
+    fingerprint_list.sort()
+    string = '-'.join(fingerprint_list)
+    chan = string + preshared_key
+    chan_hash = hashlib.sha256(chan.encode('utf-8'))
+    return chan_hash.hexdigest()
+
+
 class IPRPCChannel(Process):
 
     def __init__(self,
                  id: str,
-                 ipfs_queue_id: str,
                  peer_fingerprint: str = None,
                  encryption_helper: EncryptionHelper = None,
                  ipfs_instance: IPFSClient = None,
                  keepalive_send_interval: int = 30,
                  keepalive_timeout_interval: int = 60):
         self.id = id
-        self.queue_id = ipfs_queue_id
-        self.peer_fingerprint = peer_fingerprint
+        self.peer_id = peer_fingerprint
+        self.queue_id = generate_queue_id(self.id, self.peer_id)
         self.encryption_helper = encryption_helper
-        self.peer_id = None
         self.ipfs = ipfs_instance or IPFSClient()
         self.our_ipfs_peer_id = None
         self.tx_input, self.tx_output = Pipe()
@@ -48,6 +57,8 @@ class IPRPCChannel(Process):
         self.keepalive_send_timeout = None
         super().__init__()
         self.logger = logging.getLogger(f"<IPRPCChannel:{self.queue_id}>")
+        self.logger.info(
+            f"Spawned channel between {self.id} and {self.peer_id}")
 
     def get_pipe_endpoints(self):
         """
@@ -68,13 +79,13 @@ class IPRPCChannel(Process):
         asyncio.ensure_future(
             self._handler_loop(
                 self._handle_incoming_messages,
-                sleep=1
+                sleep=.01
             )
         )
         asyncio.ensure_future(
             self._handler_loop(
                 self._handle_tx_queue_messages,
-                sleep=1
+                sleep=.01
             )
         )
         asyncio.ensure_future(
@@ -174,7 +185,7 @@ class IPRPCChannel(Process):
                 self.logger.warning(f"Decoding failed on message: {e}")
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}:queue_id={self.queue_id}," \
+        return f"<{self.__class__.__name__}:" \
             f"peer_id={self.peer_id}," \
             f"status={self.status.name}>"
 
@@ -187,36 +198,19 @@ class ChannelManager:
         self.local_fingerprint = local_fingerprint
         self.encryption_helper = encryption_helper
         self.channels = []
+        self.pipes = {}
 
-    @staticmethod
-    def get_channel_id(*fingerprints,
-                       preshared_key: str = '',
-                       quantity: int = 1):
-        fingerprint_list = []
-        for fingerprint in fingerprints:
-            fingerprint_list.append(fingerprint)
-        fingerprint_list.sort()
-        string = '-'.join(fingerprint_list)
-        string = string + preshared_key
-        chan_list = []
-        for num in range(quantity):
-            chan_str = string + str(num)
-            chan_hash = hashlib.sha256(chan_str.encode('utf-8'))
-            chan_list.append(chan_hash.hexdigest())
-        return chan_list
-
-    def add_peer(self, public_key: pgpy.PGPKey, invitation: InvitationMessage):
+    def add_peer(self, public_key: pgpy.PGPKey):
         self.logger.info(f'Adding peer: {public_key.fingerprint}')
         for fingerprint, subkey in public_key.subkeys.items():
-            queue_id_list = self.get_channel_id(
-                self.local_fingerprint,
-                subkey.fingerprint,
-                preshared_key=invitation.preshared_key,
-                quantity=invitation.channels_per_peer
-            )
-            for queue_id in queue_id_list:
-                self.channels.append(
-                    IPRPCChannel(
-                        queue_id,
-                        self.local_fingerprint,
-                        self.encryption_helper))
+            channel = IPRPCChannel(
+                    str(self.local_fingerprint),
+                    str(subkey.fingerprint),
+                    encryption_helper=self.encryption_helper)
+            self.channels.append(channel)
+            self.pipes.update({str(fingerprint):
+                              channel.get_pipe_endpoints()})
+
+    def start_channels(self):
+        for channel in self.channels:
+            channel.start()

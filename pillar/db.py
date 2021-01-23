@@ -7,6 +7,8 @@ from sqlalchemy import create_engine, \
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.properties import ColumnProperty
 from .config import Config
 from pgpy import PGPKeyring, PGPKey
 import logging
@@ -30,6 +32,22 @@ class Key(Base):
     key = Column(BLOB())
     invitation_id = Column(Integer, ForeignKey('invitations.id'))
     invitation = relationship("Invitation", back_populates='key')
+
+
+class UserIdentity(Base):
+    __tablename__ = "user_identities"
+    id = Column(Integer, primary_key=True)
+    cid = Column(String)
+    fingerprint = Column(String)
+    fingerprint_cid = Column(String)
+
+
+class NodeIdentity(Base):
+    __tablename__ = "node_identities"
+    id = Column(Integer, primary_key=True)
+    cid = Column(String)
+    fingerprint = Column(String)
+    fingerprint_cid = Column(String)
 
 
 class Invitation(Base):
@@ -81,6 +99,17 @@ class PillarDataStore:
             else:
                 self.create_database()
 
+    def store_instance(self, model_instance):
+        session = self.get_session()
+        try:
+            session.add(model_instance)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
     def store_keyring(self, keyring: PGPKeyring):
         session = self.get_session()
         try:
@@ -106,6 +135,8 @@ class PillarDataStore:
         except Exception as e:
             session.rollback()
             raise e
+        finally:
+            session.close()
 
     def get_keys(self) -> list:
         session = self.get_session()
@@ -116,9 +147,82 @@ class PillarDataStore:
             deserialized_keys.append(deserialized_key)
         return deserialized_keys
 
+    def load_model_instance(self, model_class, filter_attribs):
+        session = self.get_session()
+        result = session.query(model_class).filter(**filter_attribs).one()
+        session.close()
+        return result
+
+    def load_model_instances(self, model_class) -> list:
+        session = self.get_session()
+        try:
+            return session.query(model_class).all()
+        finally:
+            session.close()
+
     def reinitialize_database(self):
         self.logger.info("Deleting database:")
         for tbl in reversed(Base.metadata.sorted_tables):
             self.logger.info(f"Deleted table {tbl}")
             self.pdb.engine.execute(tbl.delete())
         self.create_database()
+
+
+class PillarDatastoreMixIn:
+    model = None
+
+    def _pds_generate_model(self):
+        attribute_dict = {}
+        for attrib in self._pds_get_attributes():
+            attribute_dict.update(
+                {attrib.name: getattr(self, attrib.name)})
+        return self.model(**attribute_dict)
+
+    @classmethod
+    def _pds_get_attributes(cls):
+        attribs = []
+        for attrib_name in dir(cls.model):
+            attribute = getattr(cls.model, attrib_name)
+            if isinstance(attribute, InstrumentedAttribute):
+                if isinstance(attribute.prop, ColumnProperty):
+                    attribs.append(attribute)
+        return attribs
+
+    def pds_save(self, pds: PillarDataStore):
+        model_instance = self._pds_generate_model()
+        pds.store_instance(model_instance)
+
+    @classmethod
+    def _load_model_instances_from_db(cls, pds: PillarDataStore):
+        return pds.load_model_instances(cls.model)
+
+    @classmethod
+    def get_instance_from_model(cls, model,
+                                init_args: list = None,
+                                init_kwargs: dict = None):
+        if init_args and init_kwargs:
+            instance = cls(*init_args, **init_kwargs)
+        elif init_args:
+            instance = cls(*init_args)
+        elif init_kwargs:
+            instance = cls(**init_kwargs)
+        else:
+            instance = cls()
+
+        for attrib in cls._pds_get_attributes():
+            setattr(instance, attrib.name, getattr(model, attrib.name))
+        return instance
+
+    @classmethod
+    def load_all_from_db(cls,
+                         pds: PillarDataStore,
+                         init_args: list = None,
+                         init_kwargs: dict = None):
+        instance_list = []
+        for model in cls._load_model_instances_from_db(pds):
+            instance_list.append(cls.get_instance_from_model(
+                model,
+                init_args=init_args,
+                init_kwargs=init_kwargs)
+            )
+        return instance_list

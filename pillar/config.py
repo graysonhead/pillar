@@ -137,7 +137,10 @@ class Config:
     def load_from_yaml(cls, path: str):
         with open(path, 'r') as file:
             file_dict = yaml.load(file, Loader=yaml.FullLoader)
-        return Config(**file_dict)
+        if file_dict:
+            return Config(**file_dict)
+        else:
+            return Config()
 
     def _return_option_instance(self, option_name: str) -> ConfigOption:
         try:

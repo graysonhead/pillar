@@ -1,4 +1,4 @@
-from ..channel import IPRPCChannel, PeeringStatus
+from ..channel import IPRPCChannel, PeeringStatus, generate_queue_id
 from ..messages import PeeringHello, \
     PeeringHelloResponse, \
     IPRPCMessage, \
@@ -109,7 +109,11 @@ class TestIPRPCChannel(asynctest.TestCase):
     async def test_send_text(self, mocked_func):
         test_string = "Hello, sending test message!"
         await self.channel._send_ipfs(test_string)
-        mocked_func.assert_awaited_with('testing_queue', test_string)
+        mocked_func.assert_awaited_with(
+            generate_queue_id(
+                self.channel.id,
+                self.channel.peer_id),
+            test_string)
 
     async def test_send_message(self):
         test_class = PeeringHello(initiator_id=self.channel.id)
@@ -185,7 +189,7 @@ class TestIPRPCChannel(asynctest.TestCase):
 
     def test_channel_repr(self):
         repr_string = self.channel.__repr__()
-        expected = '<IPRPCChannel:queue_id=testing_queue,peer_id=None,' \
+        expected = '<IPRPCChannel:peer_id=testing_queue,' \
                    'status=IDLE>'
         self.assertEqual(expected, repr_string)
 
@@ -283,3 +287,14 @@ class TestIPRPCChannel(asynctest.TestCase):
         self.assertEqual(test_message.serialize_to_json(),
                          message.serialize_to_json()
                          )
+
+
+class TestQueueIDGenerator(asynctest.TestCase):
+
+    def test_queue_id_different_order(self):
+        fingerprint_1 = '6A2F 421B D348 3324 C381  40DA 073B C320 0DEC 1B82'
+        fingerprint_2 = '8B1E 9C88 2414 2D5B D80C  C383 1E0B D385 940E 0713'
+
+        channel_id_1 = generate_queue_id(fingerprint_1, fingerprint_2)
+        channel_id_2 = generate_queue_id(fingerprint_2, fingerprint_1)
+        self.assertEqual(channel_id_1, channel_id_2)

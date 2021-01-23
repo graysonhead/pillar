@@ -6,6 +6,7 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
+from .db import PillarDatastoreMixIn, UserIdentity, NodeIdentity
 import logging
 
 
@@ -20,7 +21,6 @@ class LocalIdentity:
         self.encryption_helper = EncryptionHelper(
             self.key_manager, self.key_type)
         self.channel_manager = None
-        self.start_channel_manager()
 
     def start_channel_manager(self):
         if self.channel_manager is None:
@@ -50,7 +50,7 @@ class LocalIdentity:
         except WontUpdateToStaleKey:
             pass
         invitation = InvitationMessage(
-            public_key_cid=pubkey_cid,
+            public_key_cid=self.cid,
             preshared_key=str(uuid4()),
             channels_per_peer=self.config.get_value('channels_per_peer'),
             channel_rotation_period=self.config.get_value('channels_per_peer')
@@ -79,30 +79,62 @@ class LocalIdentity:
             self.encryption_helper,
             self.config).add_unencrypted_message_to_ipfs(message)
 
+    def create_peer_channels(self):
+        for key in self.key_manager.get_keys():
+            self.channel_manager.add_peer(key)
 
-class Node(LocalIdentity):
-    def __init__(self, *args, **kwargs):
+    def run(self):
+        self.channel_manager.start_channels()
+
+
+class Node(PillarDatastoreMixIn, LocalIdentity):
+    model = NodeIdentity
+
+    def __init__(self, *args,
+                 id: int = None,
+                 fingerprint: str = None,
+                 fingerprint_cid: str = None,
+                 **kwargs):
+        self.id = id
         self.logger = logging.getLogger('<Node>')
         self.key_type = PillarKeyType.NODE_SUBKEY
+        self.fingerprint = fingerprint
+        self.fingerprint_cid = fingerprint_cid
         super().__init__(*args, **kwargs)
+        self.encryption_helper = EncryptionHelper(
+            self.key_manager, self.key_type)
+
+    def __repr__(self):
+        return f"<Node: {self.fingerprint}>"
 
     def bootstrap(self):
         self.key_manager.generate_local_node_subkey()
         self.cid = self.key_manager.user_primary_key_cid
         self.fingerprint = self.key_manager.node_subkey.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
-        self.encryption_helper = EncryptionHelper(
-            self.key_manager, self.key_type)
+
         self.start_channel_manager()
         self.logger.info(
             f'Bootstrapped Node with fingerprint: {self.fingerprint}')
 
 
-class User(LocalIdentity):
-    def __init__(self, *args, **kwargs):
+class User(PillarDatastoreMixIn, LocalIdentity):
+    model = UserIdentity
+
+    def __init__(self, *args,
+                 id: int = None,
+                 fingerprint: str = None,
+                 fingerprint_cid: str = None,
+                 **kwargs):
+        self.id = id
         self.logger = logging.getLogger('<User>')
         self.key_type = PillarKeyType.USER_SUBKEY
+        self.fingerprint = fingerprint
+        self.fingerprint_cid = fingerprint_cid
         super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return f"<User: {self.fingerprint}>"
 
     def bootstrap(self, name, email):
         self.key_manager.generate_user_primary_key(name, email)
