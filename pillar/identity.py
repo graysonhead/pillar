@@ -6,18 +6,22 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
-from .db import PillarDatastoreMixIn, UserIdentity, NodeIdentity
+from .db import PillarDatastoreMixIn, UserIdentity, NodeIdentity, \
+    PillarDataStore
+from .peer import Peer
 import logging
+import pgpy
 
 
 class LocalIdentity:
     def __init__(self, key_manager: KeyManager,
                  config: Config,
-                 cid: str = None):
+                 pds: PillarDataStore):
         self.key_manager = key_manager
         self.config = config
-        self.cid = cid
         self.ipfs = IPFSClient()
+        self.pds = pds
+        self.peers = Peer.load_all_from_db(self.pds)
         self.encryption_helper = EncryptionHelper(
             self.key_manager, self.key_type)
         self.channel_manager = None
@@ -111,7 +115,9 @@ class Node(PillarDatastoreMixIn, LocalIdentity):
             f'Bootstrapped Node with fingerprint: {self.fingerprint}')
 
     def create_peer_channels(self):
-        for key in self.key_manager.get_keys():
+        for peer in self.peers:
+            print(str(peer.key))
+            key, o = pgpy.PGPKey.from_blob(peer.key)
             self.channel_manager.add_peer(key)
 
     def run(self):

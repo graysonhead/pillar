@@ -19,18 +19,22 @@ class PillarDaemon:
         self.nodes = []
 
     def run(self):
-        self.users = User.load_all_from_db(
-            self.pds,
-            init_args=[self.key_manager, self.config])
-        self.nodes = Node.load_all_from_db(
-            self.pds,
-            init_args=[self.key_manager, self.config])
-        primary_node = self.nodes[0]
-        primary_node.start_channel_manager()
-        primary_node.create_peer_channels()
-        primary_node.run()
-        self.logger.info(f"Loaded user identities: {self.users}")
-        self.logger.info(f"Loaded node identities: {self.nodes}")
+        try:
+            self.user = User(self.key_manager, self.config, self.pds)
+            self.user.start_channel_manager()
+            self.user.create_peer_channels()
+            self.user.run()
+            self.logger.info(f"Running user daemon: {self.user}")
+        except Exception:
+            pass
+        try:
+            self.node = Node(self.key_manager, self.config, self.pds)
+            self.node.start_channel_manager()
+            self.node.create_peer_channels()
+            self.node.run()
+            self.logger.info(f"Running node daemon: {self.user}")
+        except Exception as e:
+            raise e
 
     def __repr__(self):
         return "<PillarDaemon>"
