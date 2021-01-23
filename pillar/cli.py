@@ -2,7 +2,7 @@ import argparse
 from pillar.config import Config
 from argparse import Namespace
 import logging
-from pillar.identity import User
+from pillar.identity import User, Node
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager
 from pillar.bootstrap import Bootstrapper
@@ -19,7 +19,8 @@ class CLI:
 
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
-        if not self.args.sub_command == 'bootstrap':
+        if not self.args.sub_command == '' \
+                                        'bootstrap':
             self.config = self.get_config(self.args.config)
             self.pds = PillarDataStore(self.config)
             self.key_manager = KeyManager(self.config, self.pds)
@@ -39,6 +40,10 @@ class CLI:
                 self.pds,
                 init_args=[self.key_manager, self.config]
             )
+            nodes = Node.load_all_from_db(
+                self.pds,
+                init_args=[self.key_manager, self.config]
+            )
             if self.args.identity_command == 'create_invitation':
                 print(users[0].create_invitation(
                     self.args.peer_fingerprint_cid))
@@ -51,6 +56,7 @@ class CLI:
             elif self.args.identity_command == 'show_fingerprints':
                 print("Local Fingerprints:")
                 print(f"User: {users[0].fingerprint}")
+                print(f"Node: {nodes[0].fingerprint}")
                 print(f"Peers: {users[0].key_manager.keyring.fingerprints()}")
         else:
             print("No subcommand provided")

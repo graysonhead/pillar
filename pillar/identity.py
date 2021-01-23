@@ -79,6 +79,13 @@ class LocalIdentity:
             self.encryption_helper,
             self.config).add_unencrypted_message_to_ipfs(message)
 
+    def create_peer_channels(self):
+        for key in self.key_manager.get_keys():
+            self.channel_manager.add_peer(key)
+
+    def run(self):
+        self.channel_manager.start_channels()
+
 
 class Node(PillarDatastoreMixIn, LocalIdentity):
     model = NodeIdentity
@@ -109,13 +116,6 @@ class Node(PillarDatastoreMixIn, LocalIdentity):
         self.start_channel_manager()
         self.logger.info(
             f'Bootstrapped Node with fingerprint: {self.fingerprint}')
-
-    def create_peer_channels(self):
-        for key in self.key_manager.get_keys():
-            self.channel_manager.add_peer(key)
-
-    def run(self):
-        self.channel_manager.start_channels()
 
 
 class User(PillarDatastoreMixIn, LocalIdentity):

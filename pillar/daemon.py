@@ -25,10 +25,10 @@ class PillarDaemon:
         self.nodes = Node.load_all_from_db(
             self.pds,
             init_args=[self.key_manager, self.config])
-        primary_node = self.nodes[0]
-        primary_node.start_channel_manager()
-        primary_node.create_peer_channels()
-        primary_node.run()
+        user = self.users[0]
+        user.start_channel_manager()
+        user.create_peer_channels()
+        user.run()
         self.logger.info(f"Loaded user identities: {self.users}")
         self.logger.info(f"Loaded node identities: {self.nodes}")
 
