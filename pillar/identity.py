@@ -50,7 +50,7 @@ class LocalIdentity:
         except WontUpdateToStaleKey:
             pass
         invitation = InvitationMessage(
-            public_key_cid=pubkey_cid,
+            public_key_cid=self.cid,
             preshared_key=str(uuid4()),
             channels_per_peer=self.config.get_value('channels_per_peer'),
             channel_rotation_period=self.config.get_value('channels_per_peer')
