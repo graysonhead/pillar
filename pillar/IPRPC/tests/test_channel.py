@@ -292,9 +292,9 @@ class TestIPRPCChannel(asynctest.TestCase):
     @asynctest.patch(
         'pillar.IPRPC.channel.IPRPCChannel._handle_incoming_messages')
     async def test_handle_message_current_window(self, func):
+        self.channel._establish_and_rotate_queues()
         await self.channel._handle_messages_current_window()
-        queue_id = generate_queue_id(self.channel.id, self.channel.peer_id)
-        func.assert_awaited_with(queue_id)
+        func.assert_awaited_with(self.channel.queues[1])
 
     @asynctest.patch(
         'pillar.IPRPC.channel.IPRPCChannel._handle_incoming_messages')
@@ -318,6 +318,19 @@ class TestIPRPCChannel(asynctest.TestCase):
             datetime=test_time
         )
         func.assert_awaited_with(queue_id)
+
+    @asynctest.patch(
+        'pillar.IPRPC.channel.IPRPCChannel._establish_and_rotate_queues'
+    )
+    async def test_async_queue_rotation_wrapper(self, func):
+        await self.channel._async_rotate_queues_wrapper()
+        func.assert_called()
+
+    async def test_sliding_queue_rotation(self):
+        self.channel.queues = ['old_values']
+        self.channel._establish_and_rotate_queues()
+        self.assertNotEqual(['old_values'], self.channel.queues)
+        self.assertEqual(3, self.channel.queues.__len__())
 
 
 class TestQueueIDGenerator(asynctest.TestCase):
