@@ -50,18 +50,20 @@ class IPRPCChannel(Process):
                  keepalive_timeout_interval: int = 60):
         self.id = id
         self.peer_id = peer_fingerprint
+        self.queues = []
         self.encryption_helper = encryption_helper
         self.ipfs = ipfs_instance or IPFSClient()
         self.our_ipfs_peer_id = None
         self.tx_input, self.tx_output = Pipe()
         self.rx_input, self.rx_output = Pipe()
         self.status = PeeringStatus.IDLE
+        self.logger = logging.getLogger(self.__repr__())
         self.keepalive_send_interval = keepalive_send_interval
         self.keepalive_timeout_interval = keepalive_timeout_interval
         self.timeout = None
         self.keepalive_send_timeout = None
+        self._establish_and_rotate_queues()
         super().__init__()
-        self.logger = logging.getLogger(self.__repr__())
         self.logger.info(
             f"Spawned channel between {self.id} and {self.peer_id}")
 
@@ -75,50 +77,59 @@ class IPRPCChannel(Process):
         return self.tx_input, self.rx_output
 
     def run(self) -> None:
-        self.timeout = time.time() + self.keepalive_timeout_interval
-        self.keepalive_send_timeout = time.time() + \
-            self.keepalive_send_interval
-        asyncio.ensure_future(self._handler_loop(
-            self._handle_establish_connection, sleep=5)
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_messages_current_window,
-                sleep=.01
+        while True:
+            self.timeout = time.time() + self.keepalive_timeout_interval
+            self.keepalive_send_timeout = time.time() + \
+                self.keepalive_send_interval
+            rx_workers = []
+            asyncio.ensure_future(self._handler_loop(
+                self._handle_establish_connection, sleep=5)
             )
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_messages_previous_window,
-                sleep=.01
+            rx_workers.append(asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_messages_current_window,
+                    sleep=.01
+                )
+            ))
+            rx_workers.append(asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_messages_previous_window,
+                    sleep=.01
+                )
+            ))
+            rx_workers.append(asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_messages_next_window,
+                    sleep=.01
+                )
+            ))
+            asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_tx_queue_messages,
+                    sleep=.01
+                )
             )
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_messages_next_window,
-                sleep=.01
+            asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_keepalive,
+                    sleep=5,
+                )
             )
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_tx_queue_messages,
-                sleep=.01
+            asyncio.ensure_future(
+                self._handler_loop(
+                    self._handle_timeout,
+                    sleep=5,
+                )
             )
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_keepalive,
-                sleep=5,
-            )
-        )
-        asyncio.ensure_future(
-            self._handler_loop(
-                self._handle_timeout,
-                sleep=5,
-            )
-        )
-        loop = asyncio.get_event_loop()
-        loop.run_forever()
+            asyncio.ensure_future(self._handler_loop(
+                self._async_rotate_queues_wrapper,
+                sleep=5
+            ))
+            loop = asyncio.get_event_loop()
+            loop.run_forever()
+            print(f"Cancelling rx workers: {rx_workers}")
+            for rx_worker in rx_workers:
+                rx_worker.cancel()
 
     def _change_peering_status(self, new_status: PeeringStatus):
         self.logger.info(f"Peering status change from {self.status} to "
@@ -148,24 +159,46 @@ class IPRPCChannel(Process):
             if not self.status == PeeringStatus.ESTABLISHING:
                 self._change_peering_status(PeeringStatus.IDLE)
 
-    async def _handle_messages_previous_window(self):
+    async def _async_rotate_queues_wrapper(self):
+        loop = asyncio.get_event_loop()
+        result = self._establish_and_rotate_queues()
+        if result:
+            self.logger.info("Event loop reset")
+            loop.stop()
+
+    def _establish_and_rotate_queues(self):
         previous_queue_id = generate_queue_id(
             self.id,
             self.peer_id,
             datetime=datetime.utcnow() - timedelta(hours=1)
         )
-        await self._handle_incoming_messages(previous_queue_id)
-
-    async def _handle_messages_next_window(self):
+        current_queue_id = self._get_current_queue_id()
         next_queue_id = generate_queue_id(
             self.id,
             self.peer_id,
             datetime=datetime.utcnow() + timedelta(hours=1)
         )
-        await self._handle_incoming_messages(next_queue_id)
+        current_list = [previous_queue_id, current_queue_id, next_queue_id]
+        if not self.queues:
+            self.logger.info(f"Current Queues: {self.queues}")
+            self.queues = current_list
+            return True
+        elif self.queues != current_list:
+            self.logger.info(f"Window slide occured, Old Queues: {self.queues}"
+                             f"New Queues: {current_list}")
+            self.queues = current_list
+            return True
+        else:
+            return False
+
+    async def _handle_messages_previous_window(self):
+        await self._handle_incoming_messages(self.queues[0])
+
+    async def _handle_messages_next_window(self):
+        await self._handle_incoming_messages(self.queues[2])
 
     async def _handle_messages_current_window(self):
-        await self._handle_incoming_messages(self._get_current_queue_id())
+        await self._handle_incoming_messages(self.queues[1])
 
     def _get_current_queue_id(self):
         return generate_queue_id(
@@ -207,9 +240,8 @@ class IPRPCChannel(Process):
         self.logger.info(f"Sent message: {call}")
 
     async def _send_ipfs(self, message: str) -> None:
-        queue_id = self._get_current_queue_id()
-        await self.ipfs.send_pubsub_message(queue_id, message)
-        self.logger.info(f"Sent raw message: {message}")
+        await self.ipfs.send_pubsub_message(self.queues[1], message)
+        self.logger.info(f"Sent raw message: {message} on {self.queues[1]}")
 
     async def _get_from_ipfs(self, queue_id: str):
         if not self.our_ipfs_peer_id:
