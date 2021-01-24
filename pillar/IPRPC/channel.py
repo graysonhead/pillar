@@ -24,7 +24,24 @@ class PeeringStatus(Enum):
 
 def generate_queue_id(*fingerprints,
                       preshared_key: str = '',
-                      datetime: datetime = datetime.utcnow()):
+                      datetime: datetime = datetime.utcnow()) -> str:
+    """
+    This function takes a set of fingerprints, sorts the strings alphabetically
+    and then hashes the result along with the datetime and an optionally
+    pre-shared-key. The result will change every hour.
+
+    Given the same input values on both sides of a channel, the generated
+    channel ID will be the same, allowing the nodes to connect with each other.
+
+    :param fingerprints:
+        The string representation of a key fingerprint
+    :param preshared_key:
+        An optional pre-shared-key
+    :param datetime:
+        A Datetime object
+    :return:
+        A hashed string generated from the input values.
+    """
     fingerprint_list = []
     for fingerprint in fingerprints:
         fingerprint_list.append(fingerprint)
@@ -40,6 +57,21 @@ def generate_queue_id(*fingerprints,
 
 
 class IPRPCChannel(Process):
+    """
+    An IPRPC (InterPlanetary Remote Procedure Call) channel is the base unit
+    of communication in pillar. It allows two nodes to pass IPRPCMessages
+    between each other using IPFS pubsub queues. It generates random channel
+    IDs based on the peer fingerprints, time, and an optional pre-shared-key.
+
+    The queue IDs will rotate every hour, and the channel listens on both
+    the previous hour and next hours ID so no messages should be lost during
+    the transition.
+
+    This class is designed to be run as a subprocess, as such it is started
+    with the .start() method, which calls the .run() method in a subprocess.
+    Messages are received from and passed to this thread using the pipe
+    endpoints returned by the .get_pipe_endpoints() method.
+    """
 
     def __init__(self,
                  id: str,
@@ -47,9 +79,11 @@ class IPRPCChannel(Process):
                  encryption_helper: EncryptionHelper = None,
                  ipfs_instance: IPFSClient = None,
                  keepalive_send_interval: int = 30,
-                 keepalive_timeout_interval: int = 60):
+                 keepalive_timeout_interval: int = 60,
+                 pre_shared_key: str = ''):
         self.id = id
         self.peer_id = peer_fingerprint
+        self.pre_shared_key = pre_shared_key
         self.queues = []
         self.encryption_helper = encryption_helper
         self.ipfs = ipfs_instance or IPFSClient()
@@ -77,6 +111,11 @@ class IPRPCChannel(Process):
         return self.tx_input, self.rx_output
 
     def run(self) -> None:
+        """
+        This method should not be called directly, .start() will start a
+        subprocess thread where this method will be called.
+        :return:
+        """
         while True:
             self.timeout = time.time() + self.keepalive_timeout_interval
             self.keepalive_send_timeout = time.time() + \
@@ -136,48 +175,73 @@ class IPRPCChannel(Process):
                          f"{new_status}")
         self.status = new_status
 
-    async def _handle_establish_connection(self):
+    async def _handle_establish_connection(self) -> None:
+        """
+        Sends a PeeringHello message to wake up the other side of the
+        connection.
+        """
         if not self.status == PeeringStatus.ESTABLISHED:
             self._change_peering_status(PeeringStatus.ESTABLISHING)
             await self._send_message(PeeringHello(initiator_id=self.id))
 
-    async def _handler_loop(self, handler, sleep=0, run_once: bool = False):
+    async def _handler_loop(self,
+                            handler,
+                            sleep=0,
+                            run_once: bool = False) -> None:
+        """
+        Used to implement looping logic to non-looping handlers.
+
+        This method mostly exists to make unit testing easier.
+        :param handler:
+            The async method to run
+        :param sleep:
+            Time to asyncio.sleep between each loop.
+        :param run_once:
+            Run once then break the loop.
+        """
         while True:
             await handler()
             await asyncio.sleep(sleep)
             if run_once:
                 break
 
-    async def _handle_tx_queue_messages(self):
+    async def _handle_tx_queue_messages(self) -> None:
+        """
+        If state == ESTABLISHED, this will pull messages from the tx queue pipe
+        and send them to the other peer.
+        """
         if self.status == PeeringStatus.ESTABLISHED:
             if self.tx_output.poll():
                 message = self.tx_output.recv()
                 await self._send_message(message)
 
-    async def _handle_timeout(self):
+    async def _handle_timeout(self) -> None:
         if time.time() > self.timeout:
             if not self.status == PeeringStatus.ESTABLISHING:
                 self._change_peering_status(PeeringStatus.IDLE)
 
-    async def _async_rotate_queues_wrapper(self):
+    async def _async_rotate_queues_wrapper(self) -> None:
+        """
+        If the _establish_and_rotate_queues() returns true, this resets the
+        event loop and stops all worker asyncio events so they don't wait
+        for messages on retired channels.
+        """
         loop = asyncio.get_event_loop()
         result = self._establish_and_rotate_queues()
         if result:
             self.logger.info("Event loop reset")
             loop.stop()
 
-    def _establish_and_rotate_queues(self):
-        previous_queue_id = generate_queue_id(
-            self.id,
-            self.peer_id,
-            datetime=datetime.utcnow() - timedelta(hours=1)
-        )
-        current_queue_id = self._get_current_queue_id()
-        next_queue_id = generate_queue_id(
-            self.id,
-            self.peer_id,
-            datetime=datetime.utcnow() + timedelta(hours=1)
-        )
+    def _establish_and_rotate_queues(self) -> bool:
+        """
+        Handles rotating the sliding queue_id window.
+        :return:
+            True on window change
+            False on no change
+        """
+        previous_queue_id = self._get_queue_id(time_delta=timedelta(hours=-1))
+        current_queue_id = self._get_queue_id()
+        next_queue_id = self._get_queue_id(time_delta=timedelta(hours=1))
         current_list = [previous_queue_id, current_queue_id, next_queue_id]
         if not self.queues:
             self.logger.info(f"Current Queues: {self.queues}")
@@ -191,23 +255,36 @@ class IPRPCChannel(Process):
         else:
             return False
 
-    async def _handle_messages_previous_window(self):
+    async def _handle_messages_previous_window(self) -> None:
         await self._handle_incoming_messages(self.queues[0])
 
-    async def _handle_messages_next_window(self):
+    async def _handle_messages_next_window(self) -> None:
         await self._handle_incoming_messages(self.queues[2])
 
-    async def _handle_messages_current_window(self):
+    async def _handle_messages_current_window(self) -> None:
         await self._handle_incoming_messages(self.queues[1])
 
-    def _get_current_queue_id(self):
+    def _get_queue_id(self, time_delta=None):
+        if time_delta:
+            time = datetime.utcnow() + time_delta
+        else:
+            time = datetime.utcnow()
         return generate_queue_id(
             self.id,
             self.peer_id,
-            datetime=datetime.utcnow()
+            preshared_key=self.pre_shared_key,
+            datetime=time
         )
 
-    async def _handle_incoming_messages(self, queue_id: str):
+    async def _handle_incoming_messages(self, queue_id: str) -> None:
+        """
+        Handles messages received from the other peer.
+        Some messages are needed by the class to establish a connection or keep
+        it alive. All others are output over the rx pipe so they can be passed
+        to other processes.
+        :param queue_id:
+            ID of the pubsub queue to handle messages on.
+        """
         async for rx_message in self._get_message(queue_id):
             if type(rx_message) is PeeringHello:
                 await self._send_message(

@@ -38,7 +38,8 @@ class TestRXChannelSubProcess(asynctest.TestCase):
     @asynctest.patch('pillar.ipfs.IPFSClient')
     def setUp(self, mock) -> None:
         self.channel = IPRPCChannel('test_id',
-                                    'testing_queue',)
+                                    'testing_queue',
+                                    pre_shared_key='test_preshared_key')
 
     def test_recieve_message_from_thread(self):
         message = TestMessage()
