@@ -7,12 +7,16 @@ import asyncio
 from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
-    MessageCouldNotBeVerified, KeyTypeAlreadyPresent, InvalidKeyType
+    MessageCouldNotBeVerified, KeyTypeAlreadyPresent, \
+    QueueCommandOutputTimeout
 from .db import PillarDataStore
 from enum import Enum, Flag
 from uuid import uuid4
+from pathos.helpers import mp as multiprocessing
+from queue import Empty
 import os
 import logging
+import time
 
 
 class PillarKeyType(Enum):
@@ -55,7 +59,15 @@ class KeyOptions:
     key_expires = None
 
 
-class KeyManager:
+class KeyManagerQueueMethods:
+    methods = {}
+
+    @classmethod
+    def register_method(cls, method: callable):
+        cls.methods.update({method.__name__: method})
+
+
+class KeyManager(multiprocessing.Process):
     """
     Keymanager creates and manages the keys needed to operate a
     pillar instance and decrypt messages from peers and maintains
@@ -82,6 +94,55 @@ class KeyManager:
         self.node_uuid = None
         if db_import:
             self.import_peer_keys_from_database()
+        self.loop = asyncio.get_event_loop()
+        self.command_queue = multiprocessing.Queue()
+        self.output_queue = multiprocessing.Queue()
+        self.shutdown_callback = multiprocessing.Event()
+
+        super().__init__()
+
+    async def run_queue_commands(self):
+        while True:
+            try:
+                command = self.command_queue.get_nowait()
+                args = command["args"]
+                kwargs = command["kwargs"]
+                output = KeyManagerQueueMethods.\
+                    methods[command["command_name"]](
+                        self,
+                        *args,
+                        **kwargs)
+                try:
+                    self.output_queue.put(
+                        {command["id"]: output})
+                except ValueError:
+                    self.output_queue.put(
+                        {command["id"]: str(output)})
+                await asyncio.sleep(0.01)
+            except Empty:
+                await asyncio.sleep(0.01)
+            if self.shutdown_callback.is_set():
+                break
+
+    def run(self):
+        from .identity import Node, User
+        self.user = User(self.config,
+                         self.command_queue,
+                         self.output_queue,
+                         self.shutdown_callback)
+        self.node = Node(self.config,
+                         self.command_queue,
+                         self.output_queue,
+                         self.shutdown_callback)
+
+        self.user.start()
+        self.node.start()
+
+        asyncio.ensure_future(self.run_queue_commands())
+        self.loop.run_until_complete(self.run_queue_commands())
+
+    def exit(self):
+        self.shutdown_callback.set()
 
     def get_status(self) -> KeyManagerStatus:
         present_keys = 0x0
@@ -118,12 +179,14 @@ class KeyManager:
     def is_registered(self) -> bool:
         return self.get_status() != KeyManagerStatus.UNREGISTERED
 
+    @ KeyManagerQueueMethods.register_method
     def import_or_update_peer_key(self, cid):
         try:
             return self.import_peer_key_from_cid(cid)
         except CannotImportSamePrimaryFingerprint:
             return self.update_peer_key(cid)
 
+    @ KeyManagerQueueMethods.register_method
     def import_peer_key_from_cid(self, cid):
         """
         Import a new key into the keyring from ipfs cid
@@ -229,9 +292,7 @@ class KeyManager:
             try:
                 os.remove(os.path.join(
                     self.config.get_value('config_directory'),
-                    key_type.value
-                )
-                )
+                    key_type.value))
             except FileNotFoundError:
                 pass
 
@@ -289,6 +350,7 @@ class KeyManager:
         self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
 
+    @ KeyManagerQueueMethods.register_method
     def generate_user_primary_key(self, name: str, email: str):
         uid = pgpy.PGPUID.new(name,
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
@@ -300,6 +362,7 @@ class KeyManager:
         cid = self.add_key_message_to_ipfs(key.pubkey)
         self.set_user_primary_key_cid(cid)
 
+    @ KeyManagerQueueMethods.register_method
     def generate_local_user_subkey(self):
         """
         This method creates the initial user subkey during the bootstrap
@@ -395,6 +458,7 @@ class KeyManager:
         dequeue.append(val)
         return val
 
+    @ KeyManagerQueueMethods.register_method
     def get_keys(self):
         keys = []
         for fingerprint in self.keyring.fingerprints():
@@ -402,38 +466,131 @@ class KeyManager:
                 keys.append(key)
         return keys
 
+    @ KeyManagerQueueMethods.register_method
+    def get_peer_primary_key_from_subkey_fingerprint(self,
+                                                     subkey_fingerprint: str):
+        primary_fingerprint = \
+            self.key_manager.peer_subkey_map[subkey_fingerprint]
+        return self.get_key_from_keyring(primary_fingerprint)
 
-class EncryptionHelper:
+    @ KeyManagerQueueMethods.register_method
+    def get_private_key_for_key_type(self, key_type: PillarKeyType):
+        key_type_map = {PillarKeyType.USER_PRIMARY_KEY: self.user_primary_key,
+                        PillarKeyType.REGISTRATION_PRIMARY_KEY:
+                        self.registration_primary_key,
+                        PillarKeyType.USER_SUBKEY: self.user_subkey,
+                        PillarKeyType.NODE_SUBKEY: self.node_subkey}
+        return key_type_map[key_type]
+
+    @ KeyManagerQueueMethods.register_method
+    def get_key_from_keyring(self, fingerprint: str):
+        with self.key_manager.keyring.key(fingerprint) as \
+                peer_primary_key:
+            return peer_primary_key
+
+    @ KeyManagerQueueMethods.register_method
+    def get_user_primary_key_cid(self):
+        return self.user_primary_key_cid
+
+
+class CommandWDT(multiprocessing.Process):
+    def __init__(self, duration=None):
+        self.duration = duration or 1
+        self.alarm = multiprocessing.Event()
+        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
+        super().__init__()
+
+    def run(self):
+        self.logger.debug("starting wdt")
+        time.sleep(self.duration)
+        self.logger.debug("setting alarm")
+        self.alarm.set()
+
+
+class QueueCommand:
+    def __init__(self, command_name: str, *args, **kwargs):
+        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
+        self.command_name = command_name
+        self.args = args
+        self.kwargs = kwargs
+        self.id = uuid4()
+
+    def __dict__(self):
+        return {"id": self.id,
+                "command_name": self.command_name,
+                "args": self.args,
+                "kwargs": self.kwargs}
+
+
+class KeyManagerCommandQueueMixIn:
+    def __init__(self,
+                 manager_command_queue: multiprocessing.Queue,
+                 manager_output_queue: multiprocessing.Queue,
+                 shutdown_callback: multiprocessing.Event):
+        self.manager_command_queue = manager_command_queue
+        self.manager_output_queue = manager_output_queue
+        self.shutdown_callback = shutdown_callback
+
+    def key_manager_command(self, command_name: str, *args, **kwargs):
+        command = QueueCommand(command_name, *args, **kwargs)
+        self.logger.debug(f"running command id {command.id}")
+        self.manager_command_queue.put(command.__dict__())
+        return self.get_command_output(command.id)
+
+    def get_command_output(self, uuid):
+        ret = None
+        wdt = CommandWDT()
+        wdt.start()
+        self.logger.debug("waiting for command output")
+        ret = None
+        found = False
+        while not found:
+            if wdt.alarm.is_set():
+                raise QueueCommandOutputTimeout
+            try:
+                output = self.manager_output_queue.get_nowait()
+                for id, output in output.items():
+                    if id == uuid:
+                        ret = output
+                        found = True
+                    else:
+                        self.manager_output_queue.put({id: output})
+            except Empty:
+                time.sleep(.01)
+        return ret
+
+
+class EncryptionHelper(KeyManagerCommandQueueMixIn):
     """
     EncryptionHelper provides a simple interface for common encryption
     tasks that involve the use of pillar's other web of trust facilities
     """
 
-    def __init__(self, keymanager: KeyManager, keytype: PillarKeyType):
-        self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
-        self.key_manager = keymanager
+    def __init__(self, keytype: PillarKeyType, *args):
+        self.logger = logging.getLogger(
+            f'<{super().__class__.__name__}:{self.__class__.__name__}>')
         self.keytype = keytype
-        if self.keytype == PillarKeyType.NODE_SUBKEY:
-            self.local_key = self.key_manager.node_subkey
-        elif self.keytype == PillarKeyType.USER_SUBKEY:
-            self.local_key = self.key_manager.user_subkey
-        elif self.keytype == PillarKeyType.REGISTRATION_PRIMARY_KEY:
-            self.local_key = self.key_manager.registration_primary_key
-        else:
-            raise InvalidKeyType(keytype)
+        super().__init__(*args)
+
+        self.local_key = self.key_manager_command(
+            "get_private_key_for_key_type",
+            self.keytype)
 
     def sign_and_encrypt_string_to_peer_fingerprint(self,
                                                     message: str,
                                                     remote_fingerprint: str):
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
-        parent_fingerprint = self.key_manager.peer_subkey_map[remote_keyid]
-        with self.key_manager.keyring.key(parent_fingerprint) as peer_key:
-            peer_subkey = None
-            for _, key in peer_key._children.items():
-                if key.fingerprint == remote_fingerprint:
-                    peer_subkey = key
-                    break
+
+        peer_key = self.key_manager_command(
+            "get_peer_primary_key_from_subkey_fingerprint",
+            remote_keyid)
+
+        peer_subkey = None
+        for _, key in peer_key._children.items():
+            if key.fingerprint == remote_fingerprint:
+                peer_subkey = key
+                break
 
         message = pgpy.PGPMessage.new(message)
         message |= self.local_key.sign(message)
@@ -451,11 +608,14 @@ class EncryptionHelper:
             return unverified_message
 
         signer = unverified_message.signers.pop()
-        signer_parent = self.key_manager.peer_subkey_map[signer]
-        with self.key_manager.keyring.key(signer_parent) as peer_pubkey:
-            if peer_pubkey.verify(unverified_message):
-                verified_message = unverified_message
-                self.logger.info("Message verified.")
-                return verified_message.message
-            else:
-                raise MessageCouldNotBeVerified
+
+        peer_pubkey = self.key_manager_command(
+            "get_peer_primary_key_from_subkey_fingerprint",
+            signer)
+
+        if peer_pubkey.verify(unverified_message):
+            verified_message = unverified_message
+            self.logger.info("Message verified.")
+            return verified_message.message
+        else:
+            raise MessageCouldNotBeVerified

@@ -70,3 +70,10 @@ class WrongMessageType(Exception):
 
     def __init__(self, type):
         super().__init__(f"Wrong message type: {type}.")
+
+
+class QueueCommandOutputTimeout(Exception):
+    """
+    Raised when queue command doesn't receive output within CommandWDT
+    time window.
+    """
