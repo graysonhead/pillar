@@ -105,7 +105,7 @@ class TestIPRPCChannel(asynctest.TestCase):
         ipfs_instance.pubsub = asynctest.MagicMock()
         self.channel = IPRPCChannel('test_id',
                                     'testing_queue',
-                                    ipfs_instance)
+                                    ipfs_instance=ipfs_instance)
 
     @asynctest.patch('pillar.ipfs.IPFSClient.send_pubsub_message')
     async def test_send_text(self, mocked_func):
@@ -191,8 +191,7 @@ class TestIPRPCChannel(asynctest.TestCase):
 
     def test_channel_repr(self):
         repr_string = self.channel.__repr__()
-        expected = '<IPRPCChannel:peer_id=testing_queue,' \
-                   'status=IDLE>'
+        expected = '<IPRPCChannel:peer_id=testing_queue>'
         self.assertEqual(expected, repr_string)
 
     def test_peering_status_change(self):
