@@ -100,6 +100,9 @@ class IPRPCChannel(Process):
         super().__init__()
         self.logger.info(
             f"Spawned channel between {self.id} and {self.peer_id}")
+        self.logger.info(
+            f"Initial channel window: {self.queues}"
+        )
 
     def get_pipe_endpoints(self):
         """
@@ -171,9 +174,10 @@ class IPRPCChannel(Process):
                 rx_worker.cancel()
 
     def _change_peering_status(self, new_status: PeeringStatus):
-        self.logger.info(f"Peering status change from {self.status} to "
-                         f"{new_status}")
-        self.status = new_status
+        if self.status != new_status:
+            self.logger.info(f"Peering status change from {self.status} to "
+                             f"{new_status}")
+            self.status = new_status
 
     async def _handle_establish_connection(self) -> None:
         """
@@ -310,15 +314,21 @@ class IPRPCChannel(Process):
         """This sets self.our_ipfs_peer_id so we can ignore messages we sent"""
         id_info = await self.ipfs.get_id()
         self.our_ipfs_peer_id = id_info.get('ID')
-        self.logger.info(f"Set our peer id to {self.our_ipfs_peer_id}")
+        self.logger.info(f"Set our ipfs peer id to {self.our_ipfs_peer_id}")
 
     async def _send_message(self, call: IPRPCMessage):
-        await self._send_ipfs(call.serialize_to_json())
+        message = call.serialize_to_json()
+        if self.encryption_helper:
+            message = self.encryption_helper.\
+                    sign_and_encrypt_string_to_peer_fingerprint(
+                        message,
+                        self.peer_id
+                    )
+        await self._send_ipfs(message)
         self.logger.info(f"Sent message: {call}")
 
     async def _send_ipfs(self, message: str) -> None:
         await self.ipfs.send_pubsub_message(self.queues[1], message)
-        self.logger.info(f"Sent raw message: {message} on {self.queues[1]}")
 
     async def _get_from_ipfs(self, queue_id: str):
         if not self.our_ipfs_peer_id:
@@ -330,17 +340,26 @@ class IPRPCChannel(Process):
 
     async def _get_message(self, queue_id: str):
         async for message in self._get_from_ipfs(queue_id):
+            if self.encryption_helper:
+                try:
+                    message = self._decrypt_message(message)
+                except Exception as e:
+                    self.logger.warning(f"Failed to decrypt message on"
+                                        f" encrypted channel: {e}")
             try:
                 message = IPRPCRegistry.deserialize_from_json(message)
                 self.logger.info(f"Got message from peer: {message}")
                 yield message
             except Exception as e:
-                self.logger.warning(f"Decoding failed on message: {e}")
+                self.logger.warning(f"Failed to decodde message: {e}")
+
+    def _decrypt_message(self, message: str):
+        return self.encryption_helper.\
+            decrypt_and_verify_encrypted_message(message)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}:" \
-            f"peer_id={self.peer_id}," \
-            f"status={self.status.name}>"
+            f"peer_id={self.peer_id}>"
 
 
 class ChannelManager:
