@@ -65,6 +65,7 @@ class KeyManagerQueueMethods:
     @classmethod
     def register_method(cls, method: callable):
         cls.methods.update({method.__name__: method})
+        return method
 
     @classmethod
     def get_methods(cls):

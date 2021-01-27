@@ -67,10 +67,11 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
     key_path = './data/invalid_pubkey2.msgkey'
 
 
-@skip
 class TestEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
+    @ patch('pillar.identity.User', new_callable=MagicMock)
+    @ patch('pillar.identity.Node', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = Config(config_directory="/this/shouldnt/exist")
         pds = MagicMock()
@@ -89,6 +90,8 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def test_import_peer_key(self, *args):
+
+        print(self.km)
         self.km.import_peer_key_from_cid('not_used')
         self.km.get_key_message_by_cid.assert_called()
 
@@ -115,7 +118,6 @@ class TestEmptyKeyManager(TestCase):
         self.assertEqual(self.km.is_registered(), False)
 
 
-@skip
 class TestNonEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
@@ -197,7 +199,6 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.assertEqual(status, KeyManagerStatus.PRIMARY)
 
 
-@skip
 class TestKeyManagerDBOperations(TestCase):
     @patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @patch('asyncio.get_event_loop', new_callable=MagicMock)
