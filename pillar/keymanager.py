@@ -518,15 +518,10 @@ class QueueCommand:
 
 
 class KeyManagerCommandQueueMixIn:
-    def __init__(self):
-        self.manager_command_queue = KeyManager.command_queue
-        self.manager_output_queue = KeyManager.output_queue
-        self.shutdown_callback = KeyManager.shutdown_callback
-
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
         self.logger.debug(f"running command id {command.id}")
-        self.manager_command_queue.put(command.__dict__())
+        KeyManager.command_queue.put(command.__dict__())
         return self.get_command_output(command.id)
 
     def get_command_output(self, uuid):
@@ -540,13 +535,13 @@ class KeyManagerCommandQueueMixIn:
             if wdt.alarm.is_set():
                 raise QueueCommandOutputTimeout
             try:
-                output = self.manager_output_queue.get_nowait()
+                output = KeyManager.output_queue.get_nowait()
                 for id, output in output.items():
                     if id == uuid:
                         ret = output
                         found = True
                     else:
-                        self.manager_output_queue.put({id: output})
+                        KeyManager.output_queue.put({id: output})
             except Empty:
                 time.sleep(.01)
         return ret
