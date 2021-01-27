@@ -66,6 +66,10 @@ class KeyManagerQueueMethods:
     def register_method(cls, method: callable):
         cls.methods.update({method.__name__: method})
 
+    @classmethod
+    def get_methods(cls):
+        return cls.methods
+
 
 class KeyManager(multiprocessing.Process):
     """
@@ -517,18 +521,37 @@ class QueueCommand:
                 "kwargs": self.kwargs}
 
 
+class KeyManagerCommandCallable:
+
+    def __init__(self, command: str, parent_instance):
+        self.command = command
+        self.parent_instance = parent_instance
+
+    def __call__(self, *args, **kwargs):
+        return self.parent_instance.key_manager_command(self.command,
+                                                        *args, **kwargs)
+
+
 class KeyManagerCommandQueueMixIn:
+
+    def __init__(self):
+        self.setup_keymanager_methods()
+
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
-        self.logger.debug(f"running command id {command.id}")
+        # self.logger.debug(f"running command id {command.id}")
         KeyManager.command_queue.put(command.__dict__())
         return self.get_command_output(command.id)
+
+    def setup_keymanager_methods(self):
+        for command in KeyManagerQueueMethods.get_methods():
+            setattr(self, command, KeyManagerCommandCallable(command, self))
 
     def get_command_output(self, uuid):
         ret = None
         wdt = CommandWDT()
         wdt.start()
-        self.logger.debug("waiting for command output")
+        # self.logger.debug("waiting for command output")
         ret = None
         found = False
         while not found:
