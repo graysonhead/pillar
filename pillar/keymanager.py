@@ -109,19 +109,19 @@ class KeyManager(multiprocessing.Process):
         while True:
             try:
                 command = self.command_queue.get_nowait()
-                args = command["args"]
-                kwargs = command["kwargs"]
+                args = command.args
+                kwargs = command.kwargs
                 output = KeyManagerQueueMethods.\
-                    methods[command["command_name"]](
+                    methods[command.command_name](
                         self,
                         *args,
                         **kwargs)
                 try:
                     self.output_queue.put(
-                        {command["id"]: output})
+                        {command.id: output})
                 except ValueError:
                     self.output_queue.put(
-                        {command["id"]: str(output)})
+                        {command.id: str(output)})
                 await asyncio.sleep(0.01)
             except Empty:
                 await asyncio.sleep(0.01)
@@ -536,12 +536,13 @@ class KeyManagerCommandCallable:
 class KeyManagerCommandQueueMixIn:
 
     def __init__(self):
+        self.logger = logging.getLogger("<KeyManagerCommandQueueMixIn>")
         self.setup_keymanager_methods()
 
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
-        # self.logger.debug(f"running command id {command.id}")
-        KeyManager.command_queue.put(command.__dict__())
+        self.logger.debug(f"running command id {command.id}")
+        KeyManager.command_queue.put(command)
         return self.get_command_output(command.id)
 
     def setup_keymanager_methods(self):
@@ -549,10 +550,9 @@ class KeyManagerCommandQueueMixIn:
             setattr(self, command, KeyManagerCommandCallable(command, self))
 
     def get_command_output(self, uuid):
-        ret = None
         wdt = CommandWDT()
         wdt.start()
-        # self.logger.debug("waiting for command output")
+        self.logger.debug("waiting for command output")
         ret = None
         found = False
         while not found:
@@ -579,7 +579,7 @@ class EncryptionHelper(KeyManagerCommandQueueMixIn):
 
     def __init__(self, keytype: PillarKeyType):
         self.logger = logging.getLogger(
-            f'<{super().__class__.__name__}:{self.__class__.__name__}>')
+            f'<{self.__class__.__name__}>')
         self.keytype = keytype
         super().__init__()
 
