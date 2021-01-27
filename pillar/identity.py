@@ -12,18 +12,17 @@ import logging
 from pathos.helpers import mp as multiprocessing
 
 
-class LocalIdentity(multiprocessing.Process,
-                    KeyManagerCommandQueueMixIn,
+class LocalIdentity(KeyManagerCommandQueueMixIn,
+                    multiprocessing.Process,
                     PillarDatastoreMixIn):
     def __init__(self,
-                 config: Config,
-                 *args):
+                 config: Config):
         self.public_key_cid = None
         self.config = config
         self.ipfs = IPFSClient()
         self.channel_manager = None
+        KeyManagerCommandQueueMixIn.__init__(self)
         multiprocessing.Process.__init__(self)
-        KeyManagerCommandQueueMixIn.__init__(self, *args)
 
     def start_channel_manager(self):
         if self.channel_manager is None:
@@ -36,11 +35,7 @@ class LocalIdentity(multiprocessing.Process,
                     self.encryption_helper, key.fingerprint)
 
     def run(self):
-        self.encryption_helper = EncryptionHelper(
-            self.key_type,
-            self.manager_command_queue,
-            self.manager_output_queue,
-            self.shutdown_callback)
+        self.encryption_helper = EncryptionHelper(self.key_type)
 
         self.start_channel_manager()
         self.public_key_cid = self.key_manager_command(
@@ -121,7 +116,7 @@ class Node(LocalIdentity):
         self.key_type = PillarKeyType.NODE_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
-        super().__init__(*args, **kwargs)
+        super().__init__(*args)
 
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
@@ -153,7 +148,7 @@ class User(LocalIdentity):
         self.key_type = PillarKeyType.USER_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
-        super().__init__(*args, **kwargs)
+        super().__init__(*args)
 
     def __repr__(self):
         return f"<User: {self.fingerprint}>"

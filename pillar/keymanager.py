@@ -73,6 +73,9 @@ class KeyManager(multiprocessing.Process):
     pillar instance and decrypt messages from peers and maintains
     the keyring used to validate and encrypt messages to peers.
     """
+    command_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    shutdown_callback = multiprocessing.Event()
 
     def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
@@ -94,10 +97,6 @@ class KeyManager(multiprocessing.Process):
         self.node_uuid = None
         if db_import:
             self.import_peer_keys_from_database()
-        self.loop = asyncio.get_event_loop()
-        self.command_queue = multiprocessing.Queue()
-        self.output_queue = multiprocessing.Queue()
-        self.shutdown_callback = multiprocessing.Event()
 
         super().__init__()
 
@@ -125,15 +124,11 @@ class KeyManager(multiprocessing.Process):
                 break
 
     def run(self):
+        self.loop = asyncio.get_event_loop()
         from .identity import Node, User
-        self.user = User(self.config,
-                         self.command_queue,
-                         self.output_queue,
-                         self.shutdown_callback)
-        self.node = Node(self.config,
-                         self.command_queue,
-                         self.output_queue,
-                         self.shutdown_callback)
+        self.user = User(self.config)
+
+        self.node = Node(self.config)
 
         self.user.start()
         self.node.start()
@@ -523,13 +518,10 @@ class QueueCommand:
 
 
 class KeyManagerCommandQueueMixIn:
-    def __init__(self,
-                 manager_command_queue: multiprocessing.Queue,
-                 manager_output_queue: multiprocessing.Queue,
-                 shutdown_callback: multiprocessing.Event):
-        self.manager_command_queue = manager_command_queue
-        self.manager_output_queue = manager_output_queue
-        self.shutdown_callback = shutdown_callback
+    def __init__(self):
+        self.manager_command_queue = KeyManager.command_queue
+        self.manager_output_queue = KeyManager.output_queue
+        self.shutdown_callback = KeyManager.shutdown_callback
 
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
@@ -566,11 +558,11 @@ class EncryptionHelper(KeyManagerCommandQueueMixIn):
     tasks that involve the use of pillar's other web of trust facilities
     """
 
-    def __init__(self, keytype: PillarKeyType, *args):
+    def __init__(self, keytype: PillarKeyType):
         self.logger = logging.getLogger(
             f'<{super().__class__.__name__}:{self.__class__.__name__}>')
         self.keytype = keytype
-        super().__init__(*args)
+        super().__init__()
 
         self.local_key = self.key_manager_command(
             "get_private_key_for_key_type",
