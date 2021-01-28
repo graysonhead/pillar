@@ -2,7 +2,7 @@ import argparse
 from pillar.config import Config
 from argparse import Namespace
 import logging
-from pillar.identity import User, Node
+from pillar.identity import Node
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager
 from pillar.bootstrap import Bootstrapper
@@ -35,28 +35,23 @@ class CLI:
             )
             daemon.run()
         elif self.args.sub_command == 'identity':
-            users = User.load_all_from_db(
-                self.pds,
-                init_args=[self.key_manager, self.config]
-            )
             nodes = Node.load_all_from_db(
                 self.pds,
                 init_args=[self.key_manager, self.config]
             )
             if self.args.identity_command == 'create_invitation':
-                print(users[0].create_invitation(
-                    self.args.peer_fingerprint_cid))
+                # TODO
+                pass
             elif self.args.identity_command == 'fingerprint_cid':
-                print(users[0].fingerprint_cid)
+                # TODO
+                pass
             elif self.args.identity_command == 'accept_invitation':
-                users[0].receive_invitation_by_cid(
-                    self.args.invitation_cid
-                )
+                # TODO
+                pass
             elif self.args.identity_command == 'show_fingerprints':
                 print("Local Fingerprints:")
-                print(f"User: {users[0].fingerprint}")
                 print(f"Node: {nodes[0].fingerprint}")
-                print(f"Peers: {users[0].key_manager.keyring.fingerprints()}")
+                print(f"Peers: {self.key_manager.keyring.fingerprints()}")
         else:
             print("No subcommand provided")
             sys.exit(1)
