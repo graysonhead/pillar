@@ -6,7 +6,7 @@ from .ipfs import IPFSClient
 from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
-from .db import PillarDatastoreMixIn, UserIdentity, NodeIdentity
+from .db import PillarDatastoreMixIn, NodeIdentity
 from uuid import uuid4
 import logging
 from pathos.helpers import mp as multiprocessing
@@ -16,7 +16,7 @@ class LocalIdentity(KeyManagerCommandQueueMixIn,
                     multiprocessing.Process,
                     PillarDatastoreMixIn):
     def __init__(self,
-                 config: Config):
+                 config: Config, *args):
         self.public_key_cid = None
         self.config = config
         self.ipfs = IPFSClient()
@@ -30,9 +30,11 @@ class LocalIdentity(KeyManagerCommandQueueMixIn,
             key = self.local_key = self.key_manager_command(
                 "get_private_key_for_key_type",
                 self.key_type)
+            print(key)
             if key is not None:
                 self.channel_manager = ChannelManager(
                     self.encryption_helper, key.fingerprint)
+                self.logger.debug('Channel manager started successfully.')
 
     def run(self):
         self.encryption_helper = EncryptionHelper(self.key_type)
@@ -121,41 +123,9 @@ class Node(LocalIdentity):
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
 
-    def bootstrap(self):
-        self.key_manager.generate_local_node_subkey()
-        self.public_key_cid = self.key_manager_command(
-            "get_user_primary_key_cid"),
-        self.key = self.key_manager_command("get_private_key_for_key_type",
-                                            self.key_type)
-        self.fingerprint = self.key.fingerprint
-        self.fingerprint_cid = self.create_fingerprint_cid()
-
-        self.start_channel_manager()
-        self.logger.info(
-            f'Bootstrapped Node with fingerprint: {self.fingerprint}')
-
-
-class User(LocalIdentity):
-    model = UserIdentity
-
-    def __init__(self, *args,
-                 id: int = None,
-                 fingerprint: str = None,
-                 fingerprint_cid: str = None,
-                 **kwargs):
-        self.id = id
-        self.logger = logging.getLogger('<User>')
-        self.key_type = PillarKeyType.USER_SUBKEY
-        self.fingerprint = fingerprint
-        self.fingerprint_cid = fingerprint_cid
-        super().__init__(*args)
-
-    def __repr__(self):
-        return f"<User: {self.fingerprint}>"
-
     def bootstrap(self, name, email):
         self.key_manager_command("generate_user_primary_key", name, email)
-        self.key_manager_command("generate_user_subkey")
+        self.key_manager_command("generate_node_subkey")
         self.public_key_cid = self.key_manager_command(
             "get_user_primary_key_cid"),
         self.key = self.key_manager_command("get_private_key_for_key_type",
@@ -164,4 +134,4 @@ class User(LocalIdentity):
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.start_channel_manager()
         self.logger.info(
-            f'Bootstrapped User with fingerprint: {self.fingerprint}')
+            f'Bootstrapped node with fingerprint: {self.fingerprint}')

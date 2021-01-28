@@ -70,7 +70,6 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
 class TestEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
-    @ patch('pillar.identity.User', new_callable=MagicMock)
     @ patch('pillar.identity.Node', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = Config(config_directory="/this/shouldnt/exist")
@@ -109,13 +108,6 @@ class TestEmptyKeyManager(TestCase):
     def test_update_peer_key_first_raises_exception(self, *args):
         with self.assertRaises(KeyNotInKeyring):
             self.km.update_peer_key('not_used')
-
-    def test_get_status(self):
-        status = self.km.get_status()
-        self.assertEqual(status, KeyManagerStatus.UNREGISTERED)
-
-    def test_is_registered(self):
-        self.assertEqual(self.km.is_registered(), False)
 
 
 class TestNonEmptyKeyManager(TestCase):
@@ -158,7 +150,7 @@ class TestNonEmptyKeyManager(TestCase):
             self.km.get_key_message_by_cid.assert_called()
 
     def test_load_keytype_no_key(self):
-        key = self.km.load_keytype(PillarKeyType.USER_SUBKEY)
+        key = self.km.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.assertEqual(key, None)
 
 

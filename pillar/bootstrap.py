@@ -1,7 +1,6 @@
 from argparse import Namespace
 from pillar.config import Config
 from pillar.db import PillarDataStore
-from pillar.identity import User, Node
 from pillar.keymanager import KeyManager
 from pathlib import Path
 import os
@@ -111,13 +110,10 @@ class Bootstrapper:
         return keymanager
 
     def bootstrap_keymanager_exec(self):
-        self.user = User(self.key_manager, self.config)
-        self.user.bootstrap(self.user_key_name, self.user_key_email)
-        self.user.pds_save(self.pds)
-        if self.bootstrap_node_subkey:
-            self.node = Node(self.key_manager, self.config)
-            self.node.bootstrap()
-            self.node.pds_save(self.pds)
+        self.key_manager.start()
+        # TODO: use the queue mixin to run keymanager's bootstrap_node method
+
+        self.key_manager.exit()
 
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()

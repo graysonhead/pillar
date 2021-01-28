@@ -10,7 +10,7 @@ from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent, \
     QueueCommandOutputTimeout
 from .db import PillarDataStore
-from enum import Enum, Flag
+from enum import Enum
 from uuid import uuid4
 from pathos.helpers import mp as multiprocessing
 from queue import Empty
@@ -22,25 +22,15 @@ import time
 class PillarKeyType(Enum):
     REGISTRATION_PRIMARY_KEY = "REGISTRATION_PRIMARY_KEY"
     USER_PRIMARY_KEY = "USER_PRIMARY_KEY"
-    USER_SUBKEY = "USER_SUBKEY"
     NODE_SUBKEY = "NODE_SUBKEY"
-
-
-class KeyTypes(Flag):
-    REGISTRATION = 0x0
-    PRIMARY = 0x1
-    USER = 0x2
-    NODE = 0x4
 
 
 class KeyManagerStatus(Enum):
     UNREGISTERED = "UNREGISTERED"
     NODE = "NODE"
-    USER = "USER"
     PRIMARY = "PRIMARY"
     PRIMARY_NODE = "PRIMARY+NODE"
-    PRIMARY_USER = "PRIMARY+USER"
-    PRIMARY_NODE_USER = "PRIMARY+NODE+USER"
+    PRIMARY_NODE_USER = "PRIMARY+NODE"
 
 
 class KeyOptions:
@@ -95,7 +85,6 @@ class KeyManager(multiprocessing.Process):
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
         self.user_primary_key = self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
-        self.user_subkey = self.load_keytype(PillarKeyType.USER_SUBKEY)
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
@@ -109,19 +98,19 @@ class KeyManager(multiprocessing.Process):
         while True:
             try:
                 command = self.command_queue.get_nowait()
-                args = command.args
-                kwargs = command.kwargs
+                args = command["args"]
+                kwargs = command["kwargs"]
                 output = KeyManagerQueueMethods.\
-                    methods[command.command_name](
+                    methods[command["command_name"]](
                         self,
                         *args,
                         **kwargs)
                 try:
                     self.output_queue.put(
-                        {command.id: output})
+                        {command["id"]: output})
                 except ValueError:
                     self.output_queue.put(
-                        {command.id: str(output)})
+                        {command["id"]: str(output)})
                 await asyncio.sleep(0.01)
             except Empty:
                 await asyncio.sleep(0.01)
@@ -130,54 +119,17 @@ class KeyManager(multiprocessing.Process):
 
     def run(self):
         self.loop = asyncio.get_event_loop()
-        from .identity import Node, User
-        self.user = User(self.config)
+        from .identity import Node
 
         self.node = Node(self.config)
 
-        self.user.start()
         self.node.start()
 
         asyncio.ensure_future(self.run_queue_commands())
-        self.loop.run_until_complete(self.run_queue_commands())
+        self.loop.run_forever()
 
     def exit(self):
         self.shutdown_callback.set()
-
-    def get_status(self) -> KeyManagerStatus:
-        present_keys = 0x0
-        if self.registration_primary_key is not None:
-            present_keys |= KeyTypes.REGISTRATION.value
-        else:
-            if self.user_primary_key is not None:
-                present_keys |= KeyTypes.PRIMARY.value
-            if self.user_subkey is not None:
-                present_keys |= KeyTypes.USER.value
-            if self.node_subkey is not None:
-                present_keys |= KeyTypes.NODE.value
-
-        if present_keys == KeyTypes.REGISTRATION.value:
-            return KeyManagerStatus.UNREGISTERED
-        if present_keys == KeyTypes.PRIMARY.value:
-            return KeyManagerStatus.PRIMARY
-        if present_keys == (KeyTypes.PRIMARY.value | KeyTypes.NODE.value):
-            return KeyManagerStatus.PRIMARY_NODE
-        if present_keys == (KeyTypes.PRIMARY.value | KeyTypes.USER.value):
-            return KeyManagerStatus.PRIMARY_USER
-        if present_keys ==\
-           (KeyTypes.PRIMARY.value | KeyTypes.NODE.value |
-                KeyTypes.USER.value):
-            return KeyManagerStatus.PRIMARY_NODE_USER
-        if present_keys == KeyTypes.NODE.value:
-            return KeyManagerStatus.NODE
-        if present_keys == KeyTypes.USER.value:
-            return KeyManagerStatus.USER
-        if present_keys == (KeyTypes.NODE.value | KeyTypes.USER.value):
-            return KeyManagerStatus.NODE_USER
-        return KeyManagerStatus.UNREGISTERED
-
-    def is_registered(self) -> bool:
-        return self.get_status() != KeyManagerStatus.UNREGISTERED
 
     @ KeyManagerQueueMethods.register_method
     def import_or_update_peer_key(self, cid):
@@ -363,15 +315,26 @@ class KeyManager(multiprocessing.Process):
         self.set_user_primary_key_cid(cid)
 
     @ KeyManagerQueueMethods.register_method
-    def generate_local_user_subkey(self):
+    def generate_local_node_subkey(self):
         """
-        This method creates the initial user subkey during the bootstrap
+        This method creates the initial  subkey during the bootstrap
         process using the user primary key.
         """
-        key = self.get_new_user_keypair()
+        self.node_uuid = str(uuid4())
+        key = self.get_new_keypair()
+        uid = pgpy.PGPUID.new(
+            self.node_uuid,
+            comment=PillarKeyType.NODE_SUBKEY.value,
+            email=self.user_primary_key.pubkey.userids[0].email)
+
+        key.add_uid(uid,
+                    usage=KeyOptions.usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
 
         self.write_local_privkey(
-            key, PillarKeyType.USER_SUBKEY)
+            key, PillarKeyType.NODE_SUBKEY)
 
         self.user_primary_key.add_subkey(
             key,
@@ -383,7 +346,7 @@ class KeyManager(multiprocessing.Process):
         self.set_user_primary_key_cid(cid)
         self.user_subkey = key
 
-    def get_new_user_keypair(self) -> pgpy.PGPKey:
+    def get_new_keypair(self) -> pgpy.PGPKey:
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
         key.add_uid(self.user_primary_key.pubkey.userids[0],
                     usage=KeyOptions.usage,
@@ -391,44 +354,6 @@ class KeyManager(multiprocessing.Process):
                     ciphers=KeyOptions.ciphers,
                     compression=KeyOptions.compression)
         return key
-
-    def generate_local_node_subkey(self):
-        """
-        When the user primary key is present, pillar can generate a subkey for
-        a local node instance, if needed. Otherwise, the node uuid is created
-        with the registration primary key.
-        """
-        self.node_uuid = str(uuid4())
-        key = self.get_new_user_keypair()
-        uid = pgpy.PGPUID.new(
-            self.node_uuid,
-            comment=PillarKeyType.NODE_SUBKEY.value,
-            email=self.user_primary_key.pubkey.userids[0].email)
-
-        usage = {KeyFlags.Certify,
-                 KeyFlags.Sign,
-                 KeyFlags.EncryptCommunications,
-                 KeyFlags.EncryptStorage}
-
-        key.add_uid(uid,
-                    usage=usage,
-                    hashes=KeyOptions.hashes,
-                    ciphers=KeyOptions.ciphers,
-                    compression=KeyOptions.compression)
-
-        self.write_local_privkey(
-            key, PillarKeyType.NODE_SUBKEY)
-        self.user_primary_key.add_subkey(
-            key,
-            usage=KeyOptions.usage)
-
-        self.user_primary_key._signatures.pop()
-        self.user_primary_key |= \
-            self.user_primary_key.certify(self.user_primary_key)
-        cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
-        self.set_user_primary_key_cid(cid)
-        self.node_subkey = self.load_keytype(
-            PillarKeyType.NODE_SUBKEY)
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
@@ -478,7 +403,6 @@ class KeyManager(multiprocessing.Process):
         key_type_map = {PillarKeyType.USER_PRIMARY_KEY: self.user_primary_key,
                         PillarKeyType.REGISTRATION_PRIMARY_KEY:
                         self.registration_primary_key,
-                        PillarKeyType.USER_SUBKEY: self.user_subkey,
                         PillarKeyType.NODE_SUBKEY: self.node_subkey}
         return key_type_map[key_type]
 
@@ -492,10 +416,14 @@ class KeyManager(multiprocessing.Process):
     def get_user_primary_key_cid(self):
         return self.user_primary_key_cid
 
+    @ KeyManagerQueueMethods.register_method
+    def bootstrap_node(self, name: str, email: str):
+        self.node.bootstrap(name, email)
+
 
 class CommandWDT(multiprocessing.Process):
     def __init__(self, duration=None):
-        self.duration = duration or 1
+        self.duration = duration or 6
         self.alarm = multiprocessing.Event()
         self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
         super().__init__()
@@ -542,7 +470,7 @@ class KeyManagerCommandQueueMixIn:
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
         self.logger.debug(f"running command id {command.id}")
-        KeyManager.command_queue.put(command)
+        KeyManager.command_queue.put(command.__dict__())
         return self.get_command_output(command.id)
 
     def setup_keymanager_methods(self):
