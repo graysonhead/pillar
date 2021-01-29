@@ -61,7 +61,7 @@ class TestMultiProc(asynctest.TestCase):
         self.test_class_instance.start()
 
     def tearDown(self) -> None:
-        self.test_class_instance.terminate()
+        self.test_class_instance.exit()
 
     def test_class_method_registered(self):
         self.assertIn('return_hi', TestClassRegister.methods.keys())

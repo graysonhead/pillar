@@ -92,9 +92,11 @@ class PillarWorkerThread(Process):
             except Empty:
                 await asyncio.sleep(0.01)
             if self.shutdown_callback.is_set():
+                loop = asyncio.get_event_loop()
+                loop.stop()
                 break
 
-    def exit(self, timeout: int = None):
+    def exit(self, timeout: int = 5):
         self.shutdown_callback.set()
         self.join(timeout=timeout)
         self.close()
