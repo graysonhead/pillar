@@ -2,6 +2,7 @@ import aioipfs
 from .multiproc import PillarThreadMixIn, \
     PillarThreadMethodsRegister, \
     PillarWorkerThread
+import logging
 
 
 class IPFSWorkerMethodsRegister(PillarThreadMethodsRegister):
@@ -53,9 +54,12 @@ class IPFSClient:
 class IPFSWorker(PillarWorkerThread):
     methods_register_class = IPFSWorkerMethodsRegister
 
-    def __init__(self, ipfs_client: IPFSClient = None):
+    def __init__(self, worker_id: str, ipfs_client: IPFSClient = None):
         super().__init__()
+        self.worker_id = worker_id
         self.ipfs_client = ipfs_client or IPFSClient()
+        self.logger = logging.getLogger(self.__repr__())
+        self.logger.info(f"Spawned IPFS Worker {str(self)}")
 
     @IPFSWorkerMethodsRegister.register_method
     async def get_file(self, cid: str, dstdir='.') -> None:
@@ -68,6 +72,9 @@ class IPFSWorker(PillarWorkerThread):
     @IPFSWorkerMethodsRegister.register_method
     async def add_file(self, *files: str, **kwargs):
         return await self.ipfs_client.add_file(*files, **kwargs)
+
+    def __repr__(self):
+        return f"<IPFSWorker {self.worker_id}>"
 
 
 class IPFSMixIn(PillarThreadMixIn):
