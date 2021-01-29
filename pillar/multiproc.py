@@ -3,6 +3,7 @@ from queue import Empty
 import asyncio
 import logging
 import time
+import inspect
 from uuid import uuid4
 
 
@@ -80,8 +81,16 @@ class PillarWorkerThread(Process):
                 command = self.command_queue.get_nowait()
                 args = command.args
                 kwargs = command.kwargs
-                output = self.methods_register_class.\
-                    methods[command.command_name](
+                method = self.methods_register_class. \
+                    methods[command.command_name]
+                if inspect.iscoroutinefunction(method):
+                    output = await method(
+                        self,
+                        *args,
+                        **kwargs
+                    )
+                else:
+                    output = method(
                         self,
                         *args,
                         **kwargs

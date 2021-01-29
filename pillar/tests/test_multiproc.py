@@ -39,6 +39,13 @@ class TestClass(PillarWorkerThread):
         """
         return "hi"
 
+    @TestClassRegister.register_method
+    async def return_hi_async(self):
+        """
+        Async methods work as well
+        """
+        return "hi"
+
 
 class TestClassMixIn(PillarThreadMixIn):
     """
@@ -65,7 +72,7 @@ class TestMultiProc(asynctest.TestCase):
 
     def tearDown(self) -> None:
         self.test_class_instance.exit()
-        # This seems to fix a bug on python 3.6 and 3.7 where unittests hang
+        # This seems to fix a bug on python 3.7 where unittests hang
         try:
             self.test_class_instance.is_alive()
         except ValueError:
@@ -84,6 +91,11 @@ class TestMultiProc(asynctest.TestCase):
     def test_class_remote_command_execute_autogen_method(self):
         result = self.test_class_interface_instance.test_interface.\
             return_hi()
+        self.assertEqual('hi', result)
+
+    def test_class_remote_command_execute_async(self):
+        result = self.test_class_interface_instance.test_interface.\
+            return_hi_async()
         self.assertEqual('hi', result)
 
 

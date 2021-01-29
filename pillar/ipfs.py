@@ -1,4 +1,11 @@
 import aioipfs
+from .multiproc import PillarThreadMixIn, \
+    PillarThreadMethodsRegister, \
+    PillarWorkerThread
+
+
+class IPFSWorkerMethodsRegister(PillarThreadMethodsRegister):
+    pass
 
 
 class IPFSClient:
@@ -41,3 +48,28 @@ class IPFSClient:
 
     def get_client(self) -> aioipfs.AsyncIPFS:
         return aioipfs.AsyncIPFS(**self.aioipfs_config)
+
+
+class IPFSWorker(PillarWorkerThread):
+    methods_register_class = IPFSWorkerMethodsRegister
+
+    def __init__(self, ipfs_client: IPFSClient = None):
+        super().__init__()
+        self.ipfs_client = ipfs_client or IPFSClient()
+
+    @IPFSWorkerMethodsRegister.register_method
+    async def get_file(self, cid: str, dstdir='.') -> None:
+        return await self.ipfs_client.get_file(cid, dstdir=dstdir)
+
+    @IPFSWorkerMethodsRegister.register_method
+    async def add_str(self, *args: str, **kwargs):
+        return await self.ipfs_client.add_str(*args, **kwargs)
+
+    @IPFSWorkerMethodsRegister.register_method
+    async def add_file(self, *files: str, **kwargs):
+        return await self.ipfs_client.add_file(*files, **kwargs)
+
+
+class IPFSMixIn(PillarThreadMixIn):
+    queue_thread_class = IPFSWorker
+    interface_name = "ipfs"
