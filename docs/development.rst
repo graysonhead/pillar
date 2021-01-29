@@ -22,16 +22,16 @@ The most complete example of this can be found in the unit tests,
 
 .. literalinclude:: ../pillar/tests/test_multiproc.py
    :language: python
-   :lines: 7-53
+   :lines: 7-54
 
-As you can see in the below testcase, ``return_hi()`` is callable on the
+In the below testcase, ``return_hi()`` is callable on the
 test interface attribute of TestClassMixIn, however the actual method is run
 on the worker transparently.
 
 
 .. literalinclude:: ../pillar/tests/test_multiproc.py
    :language: python
-   :lines: 58-62,74-77
+   :lines: 59-65,78-82
 
 
 By adding MixIn interfaces that inherit the above classes to Plugins as well
