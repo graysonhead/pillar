@@ -101,6 +101,11 @@ class PillarWorkerThread(Process):
         self.close()
 
     def __del__(self):
+        try:
+            if self.is_alive():
+                self.exit()
+        except ValueError:
+            pass
         if self.loop:
             self.loop.close()
 

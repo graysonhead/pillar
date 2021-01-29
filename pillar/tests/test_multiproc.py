@@ -62,6 +62,13 @@ class TestMultiProc(asynctest.TestCase):
 
     def tearDown(self) -> None:
         self.test_class_instance.exit()
+        # This seems to fix a bug on python 3.6 and 3.7 where unittests hang
+        try:
+            self.test_class_instance.is_alive()
+        except ValueError:
+            pass
+        else:
+            self.test_class_instance.terminate()
 
     def test_class_method_registered(self):
         self.assertIn('return_hi', TestClassRegister.methods.keys())
