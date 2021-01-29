@@ -9,7 +9,7 @@ install:
 script:
   - python -m unittest
   - python -m flake8 pillar
-  - coverage run --source pillar setup.py test
+  - coverage run --rcfile coverage.rc --source pillar setup.py test
 
 
 after_success:

@@ -1,3 +1,4 @@
 [run]
+include = pillar/*
 concurrency = multiprocessing
 parallel = True
