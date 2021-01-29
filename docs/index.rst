@@ -11,6 +11,7 @@ Welcome to pillar's documentation!
    :caption: Contents:
 
    introduction
+   development
 
 
 Indices and tables

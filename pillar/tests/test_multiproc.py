@@ -1,24 +1,54 @@
+"""
+IMPORTANT: This file is referenced via line numbers in the documentation on the
+"Development Guide > Threading Model" page. If you modify this file, please
+ensure that the examples on this page are still captured correctly as their
+line numbers will have changed!
+"""
 import asynctest
-from ..multiproc import PillarQueueMethodsRegister, \
-    PillarQueueThread, \
-    PillarQueueClientMixIn, \
+from ..multiproc import PillarThreadMethodsRegister, \
+    PillarWorkerThread, \
+    PillarThreadMixIn, \
     QueueCommand
 from unittest import SkipTest
 
 
-class TestClassRegister(PillarQueueMethodsRegister):
+class TestClassRegister(PillarThreadMethodsRegister):
+    """
+    This subclass stores a list of callable methods on the Worker (added via
+    the below decorator) that allow them to be called on the interface
+    attribute.
+    """
     pass
 
 
-class TestClass(PillarQueueThread):
+class TestClass(PillarWorkerThread):
+    """
+    This is the class that will spawn one or more worker threads where
+    commands will actually be run when interface methods are called.
+
+    The method register class must be specified as a class attribute as below.
+    """
     methods_register_class = TestClassRegister
 
     @TestClassRegister.register_method
     def return_hi(self):
+        """
+        The above decorator allows the interface added by TestClassMixIn to
+        trigger this method from a remote process and retrieve it's output.
+        """
         return "hi"
 
 
-class TestClassMixIn(PillarQueueClientMixIn):
+class TestClassMixIn(PillarThreadMixIn):
+    """
+    This class is inherited by the class that interacts with TestClass.
+
+    The queue_thread_class attribute must contain the target worker thread
+    class so the queues and methods of the interface can be set up correctly.
+
+    Additionally, the interface_name must be specified, and will determine
+    the attribute name of the interface on the parent class.
+    """
     queue_thread_class = TestClass
     interface_name = "test_interface"
 
