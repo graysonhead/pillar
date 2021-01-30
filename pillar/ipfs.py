@@ -19,16 +19,18 @@ class IPFSClient:
         await client.get(cid, dstdir)
         await client.close()
 
-    async def add_file(self, *files: str, **kwargs):
+    async def add_file(self, *files: str, return_client=False, **kwargs, ):
         client = self.get_client()
         await client.add(*files, **kwargs)
         await client.close()
+        if return_client:
+            return client
 
     async def add_str(self, *args: str, **kwargs):
         client = self.get_client()
         result = await client.add_str(*args, **kwargs)
         await client.close()
-        return result
+        return result, client
 
     async def send_pubsub_message(self, queue_id: str, message: str) -> None:
         client = self.get_client()
