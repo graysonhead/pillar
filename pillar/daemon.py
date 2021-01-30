@@ -1,6 +1,7 @@
 from pillar.keymanager import KeyManager
 from pillar.config import Config
 from pillar.ipfs import IPFSWorker
+from pillar.identity import Node
 import logging
 
 
@@ -12,6 +13,7 @@ class PillarDaemon:
         self.logger = logging.getLogger(self.__repr__())
         self.config = config
         self.key_manager = key_manager
+        self.node = Node(config)
         self.ipfs_workers = self.get_ipfs_workers(self.config)
 
     def start_ipfs_workers(self):
@@ -30,6 +32,7 @@ class PillarDaemon:
 
     def run(self):
         self.start_ipfs_workers()
+        self.node.start()
         self.key_manager.start()
 
     def __del__(self):

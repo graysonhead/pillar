@@ -1,13 +1,14 @@
 from argparse import Namespace
 from pillar.config import Config
 from pillar.db import PillarDataStore
-from pillar.keymanager import KeyManager
+from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
+from pillar.ipfs import IPFSWorker
 from pathlib import Path
 import os
 import sys
 
 
-class Bootstrapper:
+class Bootstrapper(KeyManagerCommandQueueMixIn):
 
     def __init__(self,
                  args: Namespace,
@@ -18,9 +19,9 @@ class Bootstrapper:
         self.key_manager = None
         self.config_path = None
         self.config = None
-        self.bootstrap_node_subkey = None
         self.user_key_name = None
         self.user_key_email = None
+        super().__init__()
 
     def bootstrap(self):
         self.bootstrap_pre()
@@ -63,7 +64,7 @@ class Bootstrapper:
 
     def bootstrap_keymanager_pre(self):
         keymanager = KeyManager(self.config, self.pds, db_import=False)
-        if keymanager.is_registered():
+        if keymanager.node_subkey is not None:
             if not self.args.purge:
                 raise FileExistsError(
                     f"We found existing keys in the config_directory ("
@@ -71,28 +72,6 @@ class Bootstrapper:
                 )
             else:
                 pass
-        answer = input(
-            "Pillar has two identity types, Users and Nodes. User subkeys \n"
-            "represent you on the network, and nodes represent autonomous \n"
-            "daemons. If you plan on running both the daemon and client from\n"
-            " this host, the default selection of 'both' will suffice. If \n"
-            "this system won't normally be online (such as a laptop), and \n"
-            "you will only use it to interact with other nodes, you should \n"
-            "select 'user'. Which subkeys would you like to bootstrap? \n"
-            "[both] / user: "
-        )
-        if answer == '':
-            self.bootstrap_node_subkey = True
-            self.planned_steps.append("Bootstrap Node subkey and User subkey")
-        elif answer.lower() == 'both':
-            self.bootstrap_node_subkey = True
-            self.planned_steps.append("Bootstrap Node subkey and User subkey")
-        elif answer.lower() == 'user':
-            self.bootstrap_node_subkey = False
-            self.planned_steps.append("Bootstrap User subkey")
-        else:
-            print("Please type 'both', or 'user'")
-            sys.exit(1)
         user_name = input("Please type your full name for key generation: ")
         if not user_name:
             print("Name field cannot be blank")
@@ -110,9 +89,20 @@ class Bootstrapper:
         return keymanager
 
     def bootstrap_keymanager_exec(self):
+        from .identity import Primary
+        
+        self.ipfs_worker = IPFSWorker(f"{self.__class__.__name__}")
+        self.ipfs_worker.start()
         self.key_manager.start()
-        # TODO: use the queue mixin to run keymanager's bootstrap_node method
 
+        self.primary_worker = Primary(self.config)
+        self.primary_worker.start()
+
+        self.primary_identity.bootstrap(self.user_key_name, self.user_key_email)
+        print("heloooo!!!!!!")
+
+        self.primary_worker.exit()
+        self.ipfs_worker.exit()
         self.key_manager.exit()
 
     def bootstrap_execute(self):

@@ -4,7 +4,7 @@ from pgpy.constants import PubKeyAlgorithm, \
 from pgpy.types import Fingerprint
 from .config import Config
 import asyncio
-from .ipfs import IPFSClient
+from .ipfs import IPFSMixIn
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
@@ -61,7 +61,7 @@ class KeyManagerQueueMethods:
         return cls.methods
 
 
-class KeyManager(multiprocessing.Process):
+class KeyManager(multiprocessing.Process, IPFSMixIn):
     """
     Keymanager creates and manages the keys needed to operate a
     pillar instance and decrypt messages from peers and maintains
@@ -74,7 +74,6 @@ class KeyManager(multiprocessing.Process):
     def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
         self.keyring = pgpy.PGPKeyring()
-        self.ipfs = IPFSClient()
         self.loop = asyncio.new_event_loop()
         self.config = config
         self.pds = pds
@@ -91,7 +90,8 @@ class KeyManager(multiprocessing.Process):
         if db_import:
             self.import_peer_keys_from_database()
 
-        super().__init__()
+        multiprocessing.Process.__init__(self)
+        IPFSMixIn.__init__(self)
 
     async def run_queue_commands(self):
         while True:
@@ -118,12 +118,6 @@ class KeyManager(multiprocessing.Process):
 
     def run(self):
         self.loop = asyncio.get_event_loop()
-        from .identity import Node
-
-        self.node = Node(self.config)
-
-        self.node.start()
-
         asyncio.ensure_future(self.run_queue_commands())
         self.loop.run_forever()
 
@@ -266,8 +260,8 @@ class KeyManager(multiprocessing.Process):
         if not os.path.isfile(
                 os.path.join(self.config.get_value('ipfs_directory'), cid)):
             self.logger.info(f"Getting cid from ipfs: {cid}")
-            self.loop.run_until_complete(self.ipfs.get_file(
-                cid, dstdir=self.config.get_value('ipfs_directory')))
+            self.ipfs.get_file(
+                cid, dstdir=self.config.get_value('ipfs_directory'))
 
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
@@ -310,6 +304,7 @@ class KeyManager(multiprocessing.Process):
         self.user_primary_key = key
         self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
+        print("this part+++++++++++++++++++++++=")
         cid = self.add_key_message_to_ipfs(key.pubkey)
         self.set_user_primary_key_cid(cid)
 
@@ -365,16 +360,15 @@ class KeyManager(multiprocessing.Process):
         message = pgpy.PGPMessage.new(
             str(key), compression=CompressionAlgorithm.Uncompressed)
         message |= self.user_primary_key.sign(message)
-        data = self.loop.run_until_complete(self.ipfs.add_str(str(message)))
+        data = self.ipfs.add_str(str(message))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
         self.user_primary_key_cid = data['Hash']
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
-        self.loop.run_until_complete(
-            self.ipfs.get_file(cid,
-                               dstdir=self.config.get_value('ipfs_directory')))
+        self.ipfs.get_file(cid,
+                               dstdir=self.config.get_value('ipfs_directory'))
 
     @staticmethod
     def get_value_and_requeue(dequeue):
@@ -469,6 +463,7 @@ class KeyManagerCommandQueueMixIn:
     def key_manager_command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
         self.logger.debug(f"running command id {command.id}")
+
         KeyManager.command_queue.put(command.__dict__())
         return self.get_command_output(command.id)
 

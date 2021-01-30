@@ -43,8 +43,8 @@ class Key(Base):
     invitation = relationship("Invitation", back_populates='key')
 
 
-class UserIdentity(Base):
-    __tablename__ = "user_identities"
+class PrimaryIdentity(Base):
+    __tablename__ = "primary_identities"
     id = Column(Integer, primary_key=True)
     cid = Column(String)
     fingerprint = Column(String)

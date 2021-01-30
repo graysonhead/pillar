@@ -1,3 +1,9 @@
+from pathos.helpers import mp as multiprocessing
+import logging
+from uuid import uuid4
+from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
+    PillarThreadMethodsRegister
+from .db import PillarDBObject, NodeIdentity, NodeIdentity, PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import Config
@@ -5,17 +11,14 @@ from .exceptions import WrongMessageType, WontUpdateToStaleKey
 from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
-from .db import PillarDBObject, NodeIdentity
-from uuid import uuid4
-import logging
-from pathos.helpers import mp as multiprocessing
 
 
 class LocalIdentity(PillarDBObject,
                     KeyManagerCommandQueueMixIn,
-                    multiprocessing.Process):
+                    PillarWorkerThread):
     def __init__(self,
                  config: Config, *args):
+        self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
         self.channel_manager = None
@@ -27,7 +30,6 @@ class LocalIdentity(PillarDBObject,
             key = self.local_key = self.key_manager_command(
                 "get_private_key_for_key_type",
                 self.key_type)
-            print(key)
             if key is not None:
                 self.channel_manager = ChannelManager(
                     self.encryption_helper, key.fingerprint)
@@ -111,7 +113,6 @@ class Node(LocalIdentity):
                  fingerprint_cid: str = None,
                  **kwargs):
         self.id = id
-        self.logger = logging.getLogger('<Node>')
         self.key_type = PillarKeyType.NODE_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
@@ -120,15 +121,34 @@ class Node(LocalIdentity):
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
 
+
+class PrimaryIdentityMethods(PillarThreadMethodsRegister):
+    pass
+
+
+class Primary(LocalIdentity):
+    model = PrimaryIdentity
+
+    def __init__(self, *args):
+        self.key_type = PillarKeyType.USER_PRIMARY_KEY
+        super().__init__(*args)
+
+    @PrimaryIdentityMethods.register_method
     def bootstrap(self, name, email):
         self.key_manager_command("generate_user_primary_key", name, email)
-        self.key_manager_command("generate_node_subkey")
+        self.key_manager_command("generate_local_node_subkey")
         self.public_key_cid = self.key_manager_command(
             "get_user_primary_key_cid"),
         self.key = self.key_manager_command("get_private_key_for_key_type",
                                             self.key_type)
+        print(self.key)
         self.fingerprint = self.key.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.start_channel_manager()
         self.logger.info(
             f'Bootstrapped node with fingerprint: {self.fingerprint}')
+
+
+class PrimaryIdentityMixIn(PillarThreadMixIn):
+    queue_thread_class = Primary
+    interface_name = "primary_identity"
