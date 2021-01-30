@@ -3,8 +3,6 @@ from pillar.config import Config
 from argparse import Namespace
 import logging
 from pillar.identity import Node
-from pillar.db import PillarDataStore
-from pillar.keymanager import KeyManager
 from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
 from pathlib import Path

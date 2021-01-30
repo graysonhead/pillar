@@ -4,7 +4,6 @@ from pillar.ipfs import IPFSWorker
 from pillar.identity import Node
 from pillar.daemon3x import daemon
 from pillar.db import PillarDataStore
-import multiprocessing
 import logging
 import time
 

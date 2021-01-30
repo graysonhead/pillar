@@ -90,21 +90,20 @@ class Bootstrapper(KeyManagerCommandQueueMixIn):
 
     def bootstrap_keymanager_exec(self):
         from .identity import Primary
-        
         self.ipfs_worker = IPFSWorker(f"{self.__class__.__name__}")
         self.logger.info("Starting IPFS Worker")
         self.ipfs_worker.start()
         self.logger.info("Starting key manager worker")
         self.key_manager.start()
 
-        
         self.primary_worker = Primary(self.config)
         self.logger.info("Starting primary identity worker")
         self.primary_worker.start()
 
         self.logger.info("Bootstrapping primary identity.")
 
-        self.primary_identity.bootstrap(self.user_key_name, self.user_key_email)
+        self.primary_identity.bootstrap(self.user_key_name,
+                                        self.user_key_email)
 
         self.logger.info("Stopping primary identity worker")
         self.primary_worker.exit()

@@ -1,5 +1,3 @@
-from pathos.helpers import mp as multiprocessing
-import logging
 from uuid import uuid4
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
     PillarThreadMethodsRegister
@@ -11,6 +9,10 @@ from .exceptions import WrongMessageType, WontUpdateToStaleKey
 from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
+from .multiproc import PillarWorkerThread, PillarThreadMixIn,\
+    PillarThreadMethodsRegister
+from uuid import uuid4
+import logging
 
 
 class LocalIdentity(PillarDBObject,
