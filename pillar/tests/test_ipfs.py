@@ -1,10 +1,6 @@
 import asynctest
 from ..ipfs import IPFSClient, IPFSWorker
-from unittest import skipIf
-import sys
-
-if sys.version_info.major == 3 and sys.version_info.minor > 7:
-    from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock
 
 
 async def test_message_return(*args, **kwargs):
@@ -40,8 +36,6 @@ class TestIPFSClient(asynctest.TestCase):
         await self.instance.get_file('A file', dstdir='/tmp/fakefile')
         mock_func.assert_awaited_with('A file', '/tmp/fakefile')
 
-    @skipIf(sys.version_info.major == 3 and
-            sys.version_info.minor == 7, "AsyncMock not present in python 3.7")
     @asynctest.patch('pillar.ipfs.aioipfs.api.CoreAPI.add',
                      new=AsyncMock())
     async def test_add_file(self):
@@ -51,8 +45,6 @@ class TestIPFSClient(asynctest.TestCase):
         ret.add.assert_awaited_with('/tmp/file_path',
                                     recursive=True)
 
-    @skipIf(sys.version_info.major == 3 and
-            sys.version_info.minor == 7, "AsyncMock not present in python 3.7")
     @asynctest.patch('pillar.ipfs.aioipfs.api.CoreAPI.add_str',
                      new=AsyncMock())
     async def test_add_str(self):
@@ -60,8 +52,6 @@ class TestIPFSClient(asynctest.TestCase):
         client.add_str.assert_awaited_with('test_string')
 
 
-@skipIf(sys.version_info.major == 3 and
-        sys.version_info.minor == 7, "AsyncMock not present in python 3.7")
 class TestIPFSWorker(asynctest.TestCase):
 
     def setUp(self) -> None:
