@@ -15,7 +15,6 @@ from ..multiproc import PillarThreadMethodsRegister, \
     MixedClass
 from multiprocessing import Queue, Event
 
-
 test_class_register = PillarThreadMethodsRegister()
 test_class_2_register = PillarThreadMethodsRegister()
 
