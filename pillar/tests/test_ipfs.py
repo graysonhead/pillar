@@ -1,8 +1,10 @@
 import asynctest
 from ..ipfs import IPFSClient, IPFSWorker
 from unittest import skipIf
-from unittest.mock import AsyncMock
 import sys
+
+if sys.version_info.major == 3 and sys.version_info.minor > 7:
+    from unittest.mock import AsyncMock
 
 
 async def test_message_return(*args, **kwargs):
