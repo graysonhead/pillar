@@ -101,7 +101,8 @@ class PillarWorkerThread(Process):
             except Empty:
                 await asyncio.sleep(0.01)
             if self.shutdown_callback.is_set():
-                self.loop.stop()
+                if self.loop:
+                    self.loop.stop()
                 break
 
     def exit(self, timeout: int = 5):
@@ -151,7 +152,7 @@ class PillarThreadInterface:
         self.queue_thread_class.command_queue.put(command)
         return self.get_command_output(command.id)
 
-    def get_command_output(self, uuid: uuid4):
+    def get_command_output(self, uuid: uuid4, only_once: bool = False):
         output_queue = self.queue_thread_class.output_queue
         ret = None
         found = False
@@ -165,6 +166,8 @@ class PillarThreadInterface:
                     else:
                         output_queue.put({id: output})
             except Empty:
+                if only_once:
+                    break
                 time.sleep(.01)
         return ret
 

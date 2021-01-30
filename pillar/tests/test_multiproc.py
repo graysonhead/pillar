@@ -5,12 +5,12 @@ ensure that the examples on this page are still captured correctly as their
 line numbers will have changed!
 """
 import asynctest
-import sys
+import time
+from uuid import uuid4
 from ..multiproc import PillarThreadMethodsRegister, \
     PillarWorkerThread, \
     PillarThreadMixIn, \
     QueueCommand
-from unittest import SkipTest, skipIf
 
 
 class TestClassRegister(PillarThreadMethodsRegister):
@@ -61,54 +61,68 @@ class TestClassMixIn(PillarThreadMixIn):
     interface_name = "test_interface"
 
 
-@skipIf(sys.version_info.major == 3 and sys.version_info.minor == 7,
-        "This test is broken on Travis CI's python3.7 images")
 class TestMultiProc(asynctest.TestCase):
-
-    def setUp(self) -> None:
-        self.test_class_instance = TestClass()
-        self.test_class_interface_instance = TestClassMixIn()
-        self.test_class_instance.start()
-
-    def tearDown(self) -> None:
-        self.test_class_instance.exit()
-        # This seems to fix a bug on python 3.7 where unittests hang
-        try:
-            self.test_class_instance.is_alive()
-        except ValueError:
-            pass
-        else:
-            self.test_class_instance.terminate()
-
-    def test_class_method_registered(self):
-        self.assertIn('return_hi', TestClassRegister.methods.keys())
-
-    def test_class_remote_command_execute(self):
-        result = self.test_class_interface_instance.\
-            test_interface.command('return_hi')
-        self.assertEqual('hi', result)
-
-    def test_class_remote_command_execute_autogen_method(self):
-        result = self.test_class_interface_instance.test_interface.\
-            return_hi()
-        self.assertEqual('hi', result)
-
-    def test_class_remote_command_execute_async(self):
-        result = self.test_class_interface_instance.test_interface.\
-            return_hi_async()
-        self.assertEqual('hi', result)
-
-
-class TestPillarQueueThread(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
         self.test_class_instance.shutdown_callback.set()
 
-    @SkipTest
-    async def test_run_queue_commands_calls_command_queue_get(self):
-        self.test_class_instance.command_queue.put(QueueCommand(
-            'return_hi'))
+    def test_class_method_registered(self):
+        self.assertIn('return_hi', TestClassRegister.methods.keys())
+
+    async def test_class_remote_command_execute(self):
+        command = QueueCommand('return_hi')
+        self.test_class_instance.command_queue.put(command)
+        time.sleep(.01)
         await self.test_class_instance.run_queue_commands()
+        time.sleep(.01)
         result = self.test_class_instance.output_queue.get_nowait()
-        print(result)
+        self.assertEqual('hi', result[command.id])
+
+    async def test_class_remote_command_execute_async(self):
+        command = QueueCommand('return_hi_async')
+        self.test_class_instance.command_queue.put(command)
+        time.sleep(.01)
+        await self.test_class_instance.run_queue_commands()
+        time.sleep(.01)
+        result = self.test_class_instance.output_queue.get_nowait()
+        self.assertEqual('hi', result[command.id])
+
+
+def echo_command_output(uuid):
+    return {uuid: "somevalue"}
+
+
+class TestPillarQueueInterface(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        self.test_class_instance = TestClass()
+        self.interface = TestClassMixIn()
+
+    def test_class_remote_command_execute_autogen_method(self):
+        self.interface.test_interface.\
+            get_command_output = echo_command_output
+        return_value = self.interface.test_interface.\
+            return_hi()
+        self.assertIn('somevalue', return_value.values())
+
+    def test_get_return_value_from_queue(self):
+        test_uuid = uuid4()
+        self.test_class_instance.output_queue.put(
+            {test_uuid: "test_value"}
+        )
+        return_value = self.interface.test_interface.\
+            get_command_output(test_uuid)
+        self.assertEqual("test_value", return_value)
+
+    def test_returns_wrong_uuid_to_queue(self):
+        test_uuid = uuid4()
+        wrong_uuid = uuid4()
+        test_output = {wrong_uuid: "test_value"}
+        self.test_class_instance.output_queue.put(test_output)
+        time.sleep(.01)
+        self.interface.test_interface. \
+            get_command_output(test_uuid, only_once=True)
+        time.sleep(.01)
+        output = self.test_class_instance.output_queue.get_nowait()
+        self.assertEqual(test_output, output)
