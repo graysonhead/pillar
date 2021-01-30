@@ -44,6 +44,7 @@ class LocalIdentity(PillarDBObject,
 
         self.create_peer_channels()
         self.channel_manager.start_channels()
+        super().run()
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
@@ -141,7 +142,6 @@ class Primary(LocalIdentity):
             "get_user_primary_key_cid"),
         self.key = self.key_manager_command("get_private_key_for_key_type",
                                             self.key_type)
-        print(self.key)
         self.fingerprint = self.key.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.start_channel_manager()

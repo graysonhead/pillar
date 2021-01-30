@@ -22,8 +22,6 @@ class CLI:
         if not self.args.sub_command == '' \
                                         'bootstrap':
             self.config = self.get_config(self.args.config)
-            self.pds = PillarDataStore(self.config)
-            self.key_manager = KeyManager(self.config, self.pds)
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
@@ -31,9 +29,11 @@ class CLI:
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
                 self.config,
-                self.key_manager
+                '/tmp/pillar.pid',
+                stdout=sys.stdout,
+                stderr=sys.stderr
             )
-            daemon.run()
+            daemon.start()
         elif self.args.sub_command == 'identity':
             nodes = Node.load_all_from_db(
                 self.pds,

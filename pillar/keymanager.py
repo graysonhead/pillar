@@ -114,6 +114,8 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
             except Empty:
                 await asyncio.sleep(0.01)
             if self.shutdown_callback.is_set():
+                loop = asyncio.get_running_loop()
+                loop.stop()
                 break
 
     def run(self):
@@ -304,7 +306,6 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
         self.user_primary_key = key
         self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
-        print("this part+++++++++++++++++++++++=")
         cid = self.add_key_message_to_ipfs(key.pubkey)
         self.set_user_primary_key_cid(cid)
 
@@ -368,7 +369,7 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
 
     def add_key_to_local_storage(self, cid: str):
         self.ipfs.get_file(cid,
-                               dstdir=self.config.get_value('ipfs_directory'))
+                           dstdir=self.config.get_value('ipfs_directory'))
 
     @staticmethod
     def get_value_and_requeue(dequeue):
@@ -412,20 +413,6 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
     @ KeyManagerQueueMethods.register_method
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
-
-
-class CommandWDT(multiprocessing.Process):
-    def __init__(self, duration=None):
-        self.duration = duration or 6
-        self.alarm = multiprocessing.Event()
-        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
-        super().__init__()
-
-    def run(self):
-        self.logger.debug("starting wdt")
-        time.sleep(self.duration)
-        self.logger.debug("setting alarm")
-        self.alarm.set()
 
 
 class QueueCommand:
@@ -472,14 +459,10 @@ class KeyManagerCommandQueueMixIn:
             setattr(self, command, KeyManagerCommandCallable(command, self))
 
     def get_command_output(self, uuid):
-        # wdt = CommandWDT()
-        # wdt.start()
         self.logger.debug("waiting for command output")
         ret = None
         found = False
         while not found:
-            # if wdt.alarm.is_set():
-            #     raise QueueCommandOutputTimeout
             try:
                 output = KeyManager.output_queue.get_nowait()
                 for id, output in output.items():

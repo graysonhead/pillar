@@ -65,6 +65,27 @@ class Invitation(Base):
     key = relationship("Key", uselist=False, back_populates='invitation')
 
 
+class PillarDB:
+    """
+    This class generates new sessions with the get_session() method
+    """
+
+    def __init__(self, config: Config):
+        self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
+        self.engine = self._get_engine(self.db_uri)
+        self.session_constructor = sessionmaker(bind=self.engine)
+
+    def _get_sqlite_uri(self, path: str):
+        absolute_path = path
+        return f"sqlite:///{absolute_path}"
+
+    def _get_engine(self, uri: str):
+        return create_engine(uri, connect_args={'check_same_thread': False})
+
+    def get_session(self):
+        return self.session_constructor()
+
+
 class PillarDataStore:
 
     def __init__(self, config: Config):
