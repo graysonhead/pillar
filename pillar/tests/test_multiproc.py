@@ -7,6 +7,7 @@ line numbers will have changed!
 import asynctest
 import time
 from uuid import uuid4
+from unittest.mock import MagicMock
 from ..multiproc import PillarThreadMethodsRegister, \
     PillarWorkerThread, \
     PillarThreadMixIn, \
@@ -59,6 +60,21 @@ class TestClassMixIn(PillarThreadMixIn):
     """
     queue_thread_class = TestClass
     interface_name = "test_interface"
+
+
+class TestMultiProcBehavior(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        self.instance = TestClass()
+
+    def test_exit_behavior(self):
+        self.instance.shutdown_callback.set = MagicMock()
+        self.instance.join = MagicMock()
+        self.instance.close = MagicMock()
+        self.instance.exit()
+        self.instance.shutdown_callback.set.assert_called()
+        self.instance.join.assert_called()
+        self.instance.close.assert_called()
 
 
 class TestMultiProc(asynctest.TestCase):

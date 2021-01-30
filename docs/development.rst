@@ -16,23 +16,11 @@ a mix-in interface specific to the worker class it needs to interface with.
 As an example, the ``KeyManager`` class inherits the ``PillarDBMixIn`` class
 to allow for KeyManager to load and save keys to the database.
 
-The most complete example of this can be found in the unit tests,
-``pillar/tests/test_multiproc.py``:
+The most complete, and simplest, example of this can be found in the
+IPFSWorkerModule:
 
-
-.. literalinclude:: ../pillar/tests/test_multiproc.py
+.. literalinclude:: ../pillar/ipfs.py
    :language: python
-   :lines: 7-54
-
-In the below testcase, ``return_hi()`` is callable on the
-test interface attribute of TestClassMixIn, however the actual method is run
-on the worker transparently.
-
-
-.. literalinclude:: ../pillar/tests/test_multiproc.py
-   :language: python
-   :lines: 59-65,78-82
-
 
 By adding MixIn interfaces that inherit the above classes to Plugins as well
 as other Pillar internal classes, threading can be accomplished in a consistent
