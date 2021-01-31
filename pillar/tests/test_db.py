@@ -1,10 +1,11 @@
-from ..db import PillarDBWorker, PillarDatastoreMixIn
+from ..db import PillarDBWorker, PillarDBMixIn
 from ..config import Config
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
+from ..multiproc import MixedClass
 
 
 class TestPillarDB(TestCase):
@@ -42,7 +43,7 @@ class TestChild(TestBase):
     some_other_string = Column(String(120))
 
 
-class TestClass(PillarDatastoreMixIn):
+class TestClass(PillarDBMixIn, metaclass=MixedClass):
     model = TestModel
 
     def __init__(self,
@@ -54,17 +55,15 @@ class TestClass(PillarDatastoreMixIn):
         self.test_int = test_int
         self.test_str = test_str
         self.unrelated_attrib = unrelated_attrib
-        super().__init__()
 
 
-class TestParentClass(PillarDatastoreMixIn):
+class TestParentClass(PillarDBMixIn, metaclass=MixedClass):
     model = TestParent
 
     def __init__(self, id: int = None,
                  some_string: str = ''):
         self.id = id
         self.some_string = some_string
-        super().__init__()
 
 
 class TestPillarDatastoreMixIn(TestCase):

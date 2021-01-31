@@ -15,7 +15,11 @@ from sqlalchemy.orm.properties import ColumnProperty
 from .config import Config
 from pgpy import PGPKeyring, PGPKey
 from contextlib import contextmanager
+from multiprocessing import Queue, Event
 import logging
+
+pillar_db_register = PillarThreadMethodsRegister()
+
 
 Base = declarative_base()
 
@@ -151,15 +155,14 @@ class PillarDataStore:
         self.create_database()
 
 
-class PillarDBMethodsRegister(PillarThreadMethodsRegister):
-    pass
-
-
 class PillarDBWorker(PillarWorkerThread):
     """
     This class generates new sessions with the get_session() method
     """
-    methods_register_class = PillarDBMethodsRegister
+    command_queue = Queue()
+    output_queue = Queue()
+    shutdown_callback = Event()
+    methods_register = pillar_db_register
 
     def __init__(self, config: Config):
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
@@ -189,19 +192,19 @@ class PillarDBWorker(PillarWorkerThread):
         finally:
             session.close()
 
-    @PillarDBMethodsRegister.register_method
+    @pillar_db_register.register_method
     def add_item(self, item):
         with self.get_scoped_session() as session:
             session.merge(item)
 
-    @PillarDBMethodsRegister.register_method
+    @pillar_db_register.register_method
     def get_all(self, model, expunge: bool = True):
         with self.get_scoped_session() as session:
             records = session.query(model).all()
             session.expunge_all()
             return records
 
-    @PillarDBMethodsRegister.register_method
+    @pillar_db_register.register_method
     def get_keys(self) -> list:
         with self.get_scoped_session() as session:
             keys = session.query(Key).all()
@@ -211,7 +214,7 @@ class PillarDBWorker(PillarWorkerThread):
                 deserialized_keys.append(deserialized_key)
             return deserialized_keys
 
-    @PillarDBMethodsRegister.register_method
+    @pillar_db_register.register_method
     def save_key(self, key: PGPKey):
         with self.get_scoped_session() as session:
             self.logger.info(f"Storing key {key.fingerprint} in database")
@@ -219,13 +222,10 @@ class PillarDBWorker(PillarWorkerThread):
             session.add(key_item)
 
 
-class PillarDatastoreMixIn(PillarThreadMixIn):
+class PillarDBMixIn(PillarThreadMixIn):
     model = None
     queue_thread_class = PillarDBWorker
     interface_name = "pillar_db"
-
-    def __init__(self):
-        super().__init__()
 
     def _pds_generate_model(self):
         attribute_dict = {}
@@ -250,7 +250,7 @@ class PillarDatastoreMixIn(PillarThreadMixIn):
 
     @classmethod
     def _load_model_instances_from_db(cls, expunge: bool = True):
-        temp_instance = PillarDatastoreMixIn()
+        temp_instance = PillarDBMixIn()
         return temp_instance.pillar_db.get_all(cls.model, expunge=expunge)
 
     @classmethod
