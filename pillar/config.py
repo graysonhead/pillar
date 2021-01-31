@@ -34,6 +34,8 @@ class ConfigOption:
         if not value:
             if PosixPath in self.valid_types:
                 self.value = self._parse_poisx_path(self.default_value)
+            else:
+                self.value = self.default_value
         else:
             if PosixPath in self.valid_types:
                 self.value = self._parse_poisx_path(value)
@@ -47,9 +49,7 @@ class ConfigOption:
     def get(self):
         if self.value == UNSET:
             self.set()
-            return self.default_value
-        else:
-            return self.value
+        return self.value
 
 
 class Config:
