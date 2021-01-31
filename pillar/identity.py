@@ -13,8 +13,8 @@ from pathos.helpers import mp as multiprocessing
 
 
 class LocalIdentity(KeyManagerCommandQueueMixIn,
-                    multiprocessing.Process,
-                    PillarDatastoreMixIn):
+                    PillarDatastoreMixIn,
+                    multiprocessing.Process):
     def __init__(self,
                  config: Config, *args):
         self.public_key_cid = None
@@ -22,6 +22,7 @@ class LocalIdentity(KeyManagerCommandQueueMixIn,
         self.ipfs = IPFSClient()
         self.channel_manager = None
         KeyManagerCommandQueueMixIn.__init__(self)
+        PillarDatastoreMixIn.__init__(self)
         multiprocessing.Process.__init__(self)
 
     def start_channel_manager(self):
