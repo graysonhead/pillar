@@ -69,6 +69,8 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
     """
     command_queue = multiprocessing.Queue()
     output_queue = multiprocessing.Queue()
+    methods_register_class = KeyManagerQueueMethods
+
     shutdown_callback = multiprocessing.Event()
 
     def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
@@ -90,6 +92,7 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
         if db_import:
             self.import_peer_keys_from_database()
 
+        self.queue_thread_class = self.__class__
         multiprocessing.Process.__init__(self)
         IPFSMixIn.__init__(self)
 

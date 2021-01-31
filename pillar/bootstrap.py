@@ -2,13 +2,15 @@ from argparse import Namespace
 from pillar.config import Config
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
+from pillar.identity import PrimaryIdentityMixIn, Primary
 from pillar.ipfs import IPFSWorker
 from pathlib import Path
 import os
 import sys
 
 
-class Bootstrapper(KeyManagerCommandQueueMixIn):
+class Bootstrapper(KeyManagerCommandQueueMixIn,
+                   PrimaryIdentityMixIn):
 
     def __init__(self,
                  args: Namespace,
@@ -21,7 +23,8 @@ class Bootstrapper(KeyManagerCommandQueueMixIn):
         self.config = None
         self.user_key_name = None
         self.user_key_email = None
-        super().__init__()
+        KeyManagerCommandQueueMixIn.__init__(self)
+        PrimaryIdentityMixIn.__init__(self)
 
     def bootstrap(self):
         self.bootstrap_pre()
@@ -62,7 +65,7 @@ class Bootstrapper(KeyManagerCommandQueueMixIn):
         self.pds.create_database(purge=self.args.purge)
         print("Database created")
 
-    def bootstrap_keymanager_pre(self):
+    def bootstrap_keymanager_pre(self) -> KeyManager:
         keymanager = KeyManager(self.config, self.pds, db_import=False)
         if keymanager.node_subkey is not None:
             if not self.args.purge:
@@ -89,28 +92,27 @@ class Bootstrapper(KeyManagerCommandQueueMixIn):
         return keymanager
 
     def bootstrap_keymanager_exec(self):
-        from .identity import Primary
-        self.ipfs_worker = IPFSWorker(f"{self.__class__.__name__}")
         self.logger.info("Starting IPFS Worker")
-        self.ipfs_worker.start()
+        ipfs_worker = IPFSWorker(self.config)
+        ipfs_worker.start()
+
         self.logger.info("Starting key manager worker")
         self.key_manager.start()
 
-        self.primary_worker = Primary(self.config)
         self.logger.info("Starting primary identity worker")
-        self.primary_worker.start()
+        primary_worker = Primary(self.config)
+        primary_worker.start()
 
         self.logger.info("Bootstrapping primary identity.")
-
         self.primary_identity.bootstrap(self.user_key_name,
                                         self.user_key_email)
 
         self.logger.info("Stopping primary identity worker")
-        self.primary_worker.exit()
-        self.logger.info("Stopping IPFS worker")
-        self.ipfs_worker.exit()
+        primary_worker.exit()
         self.logger.info("Stopping key manager worker")
         self.key_manager.exit()
+        self.logger.info("Stopping IPFS worker")
+        ipfs_worker.exit()
 
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()

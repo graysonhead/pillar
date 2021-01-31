@@ -45,8 +45,9 @@ class LocalIdentity(PillarDBObject,
             "get_user_primary_key_cid")
 
         self.create_peer_channels()
-        self.channel_manager.start_channels()
-        super().run()
+        if self.channel_manager is not None:
+            self.channel_manager.start_channels()
+        PillarWorkerThread.run(self)
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
@@ -131,9 +132,12 @@ class PrimaryIdentityMethods(PillarThreadMethodsRegister):
 
 class Primary(LocalIdentity):
     model = PrimaryIdentity
+    methods_register_class = PrimaryIdentityMethods
 
     def __init__(self, *args):
         self.key_type = PillarKeyType.USER_PRIMARY_KEY
+        self.methods_register_class = PrimaryIdentityMethods
+
         super().__init__(*args)
 
     @PrimaryIdentityMethods.register_method
