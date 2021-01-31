@@ -2,11 +2,10 @@ import aioipfs
 from .multiproc import PillarThreadMixIn, \
     PillarThreadMethodsRegister, \
     PillarWorkerThread
+from multiprocessing import Queue, Event
 import logging
 
-
-class IPFSWorkerMethodsRegister(PillarThreadMethodsRegister):
-    pass
+ipfs_worker_register = PillarThreadMethodsRegister()
 
 
 class IPFSClient:
@@ -54,7 +53,10 @@ class IPFSClient:
 
 
 class IPFSWorker(PillarWorkerThread):
-    methods_register_class = IPFSWorkerMethodsRegister
+    command_queue = Queue()
+    output_queue = Queue()
+    shutdown_callback = Event()
+    methods_register = ipfs_worker_register
 
     def __init__(self, worker_id: str, ipfs_client: IPFSClient = None):
         super().__init__()
@@ -63,15 +65,15 @@ class IPFSWorker(PillarWorkerThread):
         self.logger = logging.getLogger(self.__repr__())
         self.logger.info(f"Spawned IPFS Worker {str(self)}")
 
-    @IPFSWorkerMethodsRegister.register_method
+    @ipfs_worker_register.register_method
     async def get_file(self, cid: str, dstdir='.') -> None:
         return await self.ipfs_client.get_file(cid, dstdir=dstdir)
 
-    @IPFSWorkerMethodsRegister.register_method
+    @ipfs_worker_register.register_method
     async def add_str(self, *args: str, **kwargs):
         return await self.ipfs_client.add_str(*args, **kwargs)
 
-    @IPFSWorkerMethodsRegister.register_method
+    @ipfs_worker_register.register_method
     async def add_file(self, *files: str, **kwargs):
         return await self.ipfs_client.add_file(*files, **kwargs)
 

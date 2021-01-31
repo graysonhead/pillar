@@ -11,16 +11,13 @@ from unittest.mock import MagicMock
 from ..multiproc import PillarThreadMethodsRegister, \
     PillarWorkerThread, \
     PillarThreadMixIn, \
-    QueueCommand
+    QueueCommand, \
+    MixedClass
+from multiprocessing import Queue, Event
 
 
-class TestClassRegister(PillarThreadMethodsRegister):
-    """
-    This subclass stores a list of callable methods on the Worker (added via
-    the below decorator) that allow them to be called on the interface
-    attribute.
-    """
-    pass
+test_class_register = PillarThreadMethodsRegister()
+test_class_2_register = PillarThreadMethodsRegister()
 
 
 class TestClass(PillarWorkerThread):
@@ -30,9 +27,12 @@ class TestClass(PillarWorkerThread):
 
     The method register class must be specified as a class attribute as below.
     """
-    methods_register_class = TestClassRegister
+    command_queue = Queue()
+    output_queue = Queue()
+    shutdown_callback = Event()
+    methods_register = test_class_register
 
-    @TestClassRegister.register_method
+    @test_class_register.register_method
     def return_hi(self):
         """
         The above decorator allows the interface added by TestClassMixIn to
@@ -40,11 +40,22 @@ class TestClass(PillarWorkerThread):
         """
         return "hi"
 
-    @TestClassRegister.register_method
+    @test_class_register.register_method
     async def return_hi_async(self):
         """
         Async methods work as well
         """
+        return "hi"
+
+
+class TestClass2(PillarWorkerThread):
+    command_queue = Queue()
+    output_queue = Queue()
+    shutdown_callback = Event()
+    methods_register = test_class_2_register
+
+    @test_class_2_register.register_method
+    def return_hi_2(self):
         return "hi"
 
 
@@ -60,6 +71,26 @@ class TestClassMixIn(PillarThreadMixIn):
     """
     queue_thread_class = TestClass
     interface_name = "test_interface"
+
+
+class TestClass2MixIn(PillarThreadMixIn):
+    """
+    This class is inherited by the class that interacts with TestClass.
+
+    The queue_thread_class attribute must contain the target worker thread
+    class so the queues and methods of the interface can be set up correctly.
+
+    Additionally, the interface_name must be specified, and will determine
+    the attribute name of the interface on the parent class.
+    """
+    queue_thread_class = TestClass2
+    interface_name = "test_interface_2"
+
+
+class MultipleMixInInterfaces(TestClassMixIn,
+                              TestClass2MixIn,
+                              metaclass=MixedClass):
+    pass
 
 
 class TestMultiProcBehavior(asynctest.TestCase):
@@ -84,7 +115,7 @@ class TestMultiProc(asynctest.TestCase):
         self.test_class_instance.shutdown_callback.set()
 
     def test_class_method_registered(self):
-        self.assertIn('return_hi', TestClassRegister.methods.keys())
+        self.assertIn('return_hi', test_class_register.methods.keys())
 
     async def test_class_remote_command_execute(self):
         command = QueueCommand('return_hi')
@@ -113,7 +144,8 @@ class TestPillarQueueInterface(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
-        self.interface = TestClassMixIn()
+        self.interface = TestClassMixIn(TestClassMixIn.interface_name,
+                                        TestClassMixIn.queue_thread_class)
 
     def test_class_remote_command_execute_autogen_method(self):
         self.interface.test_interface.\
@@ -142,3 +174,44 @@ class TestPillarQueueInterface(asynctest.TestCase):
         time.sleep(.01)
         output = self.test_class_instance.output_queue.get_nowait()
         self.assertEqual(test_output, output)
+
+
+class TestMultipleThreadInstances(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        self.test_class_instance = TestClass()
+        self.interface = TestClassMixIn(TestClassMixIn.interface_name,
+                                        TestClassMixIn.queue_thread_class)
+        self.test_class_instance_2 = TestClass2()
+        self.interface2 = TestClass2MixIn(TestClass2MixIn.interface_name,
+                                          TestClass2MixIn.queue_thread_class)
+
+    def test_queues_not_same_instance(self):
+        self.assertNotEqual(self.test_class_instance.output_queue,
+                            self.test_class_instance_2.output_queue)
+        self.assertNotEqual(self.test_class_instance.command_queue,
+                            self.test_class_instance_2.command_queue)
+
+
+class TestMultipleMixInInterfacesOnSameClass(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        self.test_class_instance = TestClass()
+        self.test_class_instance_2 = TestClass2()
+        self.fake_plugin = MultipleMixInInterfaces()
+
+    def test_both_interfaces_created(self):
+        self.assertEqual(True, hasattr(
+            self.fake_plugin, TestClassMixIn.interface_name))
+        self.assertEqual(True, hasattr(
+            self.fake_plugin, TestClass2MixIn.interface_name))
+
+    def test_interfaces_have_correct_methods(self):
+        interface_1 = getattr(self.fake_plugin,
+                              TestClassMixIn.interface_name)
+        interface_2 = getattr(self.fake_plugin,
+                              TestClass2MixIn.interface_name)
+        self.assertEqual(True, hasattr(interface_1, "return_hi"))
+        self.assertEqual(True, hasattr(interface_1, "return_hi_async"))
+        self.assertEqual(False, hasattr(interface_1, "return_hi_2"))
+        self.assertEqual(True, hasattr(interface_2, "return_hi_2"))

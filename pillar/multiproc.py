@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue, Event
+from multiprocessing import Process
 from queue import Empty
 import asyncio
 import logging
@@ -26,16 +26,15 @@ class PillarThreadMethodsRegister:
     This class keeps track of registered methods so they can be added to the
     PillarThreadInterface dynamically.
     """
-    methods = {}
+    def __init__(self):
+        self.methods = {}
 
-    @classmethod
-    def register_method(cls, method: callable):
-        cls.methods.update({method.__name__: method})
+    def register_method(self, method: callable):
+        self.methods.update({method.__name__: method})
         return method
 
-    @classmethod
-    def get_methods(cls):
-        return cls.methods
+    def get_methods(self):
+        return self.methods
 
 
 class PillarThreadCommandCallable:
@@ -58,15 +57,21 @@ class PillarWorkerThread(Process):
     Any methods added to the registry via decorator will be callable by
     the PillarThreadInterface
 
-    The methods_register_class class attribute must be set to the
+    The methods_register class attribute must be set to the
     PillarThreadMethodsRegister subclass used for this interface
 
     This inherits multiprocess.Process, and is started with self.start()
-    """
+
+    Any class that inherits this one must supply the following class
+    attributes:
     command_queue = Queue()
     output_queue = Queue()
     shutdown_callback = Event()
-    methods_register_class = None
+    """
+    command_queue = None
+    output_queue = None
+    shutdown_callback = None
+    methods_register = None
 
     def __init__(self):
         self.loop = None
@@ -81,7 +86,7 @@ class PillarWorkerThread(Process):
                 command = self.command_queue.get_nowait()
                 args = command.args
                 kwargs = command.kwargs
-                method = self.methods_register_class. \
+                method = self.methods_register. \
                     methods[command.command_name]
                 if inspect.iscoroutinefunction(method):
                     output = await method(
@@ -140,7 +145,7 @@ class PillarThreadInterface:
                  queue_thread_class: PillarWorkerThread
                  ):
         self.queue_thread_class = queue_thread_class
-        self.method_register = queue_thread_class.methods_register_class
+        self.method_register = queue_thread_class.methods_register
         self.setup_command_methods()
 
     def setup_command_methods(self):
@@ -182,9 +187,27 @@ class PillarThreadMixIn:
     queue_thread_class = None
     interface_name = None
 
-    def __init__(self):
+    def __init__(self, interface_name, queue_thread_class):
         setattr(self,
-                self.interface_name,
+                interface_name,
                 PillarThreadInterface(
-                    self.queue_thread_class)
+                    queue_thread_class)
                 )
+
+
+class MixedClass(type):
+    def __new__(cls, name, bases, classdict):
+        classinit = classdict.get('__init__')
+
+        def __init__(self, *args, **kwargs):
+            for base in type(self).__bases__:
+                if issubclass(base, PillarThreadMixIn):
+                    base.__init__(self, base.interface_name,
+                                  base.queue_thread_class)
+                else:
+                    base.__init__(self, *args, **kwargs)
+            if classinit:
+                classinit(self, *args, **kwargs)
+
+        classdict['__init__'] = __init__
+        return type.__new__(cls, name, bases, classdict)
