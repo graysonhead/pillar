@@ -6,7 +6,8 @@ from sqlalchemy import create_engine, \
     ForeignKey
 from .multiproc import PillarThreadMethodsRegister, \
     PillarThreadMixIn, \
-    PillarWorkerThread
+    PillarWorkerThread, \
+    MixedClass
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -222,10 +223,21 @@ class PillarDBWorker(PillarWorkerThread):
             session.add(key_item)
 
 
-class PillarDBMixIn(PillarThreadMixIn):
-    model = None
+class DBMixIn(PillarThreadMixIn):
     queue_thread_class = PillarDBWorker
-    interface_name = "pillar_db"
+    interface_name = "db"
+
+
+class DBInterface(DBMixIn,
+                  metaclass=MixedClass):
+    pass
+
+
+class PillarDBObject:
+    model = None
+
+    def __init__(self):
+        self.interface = DBInterface()
 
     def _pds_generate_model(self):
         attribute_dict = {}
@@ -246,12 +258,17 @@ class PillarDBMixIn(PillarThreadMixIn):
 
     def pds_save(self):
         model_instance = self._pds_generate_model()
-        self.pillar_db.add_item(model_instance)
+        self.interface.db.add_item(model_instance)
 
     @classmethod
-    def _load_model_instances_from_db(cls, expunge: bool = True):
-        temp_instance = PillarDBMixIn()
-        return temp_instance.pillar_db.get_all(cls.model, expunge=expunge)
+    def _load_model_instances_from_db(cls, expunge: bool = True,
+                                      return_interface=False):
+        temp_interface = DBInterface()
+        model_instance = temp_interface.db.get_all(cls.model, expunge=expunge)
+        if not return_interface:
+            return model_instance
+        else:
+            return model_instance, temp_interface
 
     @classmethod
     def get_instance_from_model(cls, model,
@@ -274,9 +291,9 @@ class PillarDBMixIn(PillarThreadMixIn):
     def load_all_from_db(cls,
                          init_args: list = None,
                          init_kwargs: dict = None,
-                         expunge: bool = True):
+                         expunge: bool = True,):
         instance_list = []
-        for model in cls._load_model_instances_from_db(expunge=True):
+        for model in cls._load_model_instances_from_db(expunge=expunge):
             instance_list.append(cls.get_instance_from_model(
                 model,
                 init_args=init_args,

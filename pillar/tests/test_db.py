@@ -1,11 +1,10 @@
-from ..db import PillarDBWorker, PillarDBMixIn
+from ..db import PillarDBWorker, PillarDBObject
 from ..config import Config
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from ..multiproc import MixedClass
 
 
 class TestPillarDB(TestCase):
@@ -43,37 +42,43 @@ class TestChild(TestBase):
     some_other_string = Column(String(120))
 
 
-class TestClass(PillarDBMixIn, metaclass=MixedClass):
+class TestClass(PillarDBObject):
     model = TestModel
 
     def __init__(self,
+                 *args,
                  id: int = None,
                  test_int: int = None,
                  test_str: str = '',
-                 unrelated_attrib: str = ''):
+                 unrelated_attrib: str = '',
+                 **kwargs):
         self.id = id
         self.test_int = test_int
         self.test_str = test_str
         self.unrelated_attrib = unrelated_attrib
+        self.args = args
+        self.kwargs = kwargs
+        super().__init__()
 
 
-class TestParentClass(PillarDBMixIn, metaclass=MixedClass):
+class TestParentClass(PillarDBObject):
     model = TestParent
 
     def __init__(self, id: int = None,
                  some_string: str = ''):
         self.id = id
         self.some_string = some_string
+        super().__init__()
 
 
-class TestPillarDatastoreMixIn(TestCase):
+class TestPillarDBObject(TestCase):
 
     def setUp(self) -> None:
         self.test_args = {"test_int": 4,
                           "test_str": "hi",
                           "unrelated_attrib": "yo"}
         self.test_class = TestClass(**self.test_args)
-        self.test_class.pillar_db = MagicMock()
+        self.test_class.interface.db = MagicMock()
         self.pds = MagicMock()
 
     def test_generate_model_instance(self):
@@ -85,7 +90,35 @@ class TestPillarDatastoreMixIn(TestCase):
 
     def test_pds_save(self):
         self.test_class.pds_save()
-        self.test_class.pillar_db.add_item.assert_called()
+        self.test_class.interface.db.add_item.assert_called()
+
+    @patch('pillar.db.DBInterface')
+    def test_load_instances_from_db(self, mocked_interface):
+        instance, interface = TestClass.\
+            _load_model_instances_from_db(return_interface=True)
+        interface.db.get_all.assert_called()
+
+    @patch('pillar.db.DBInterface')
+    def test_load_all_from_db_empty_no_models(self, patched_class):
+        result = TestClass.load_all_from_db()
+        self.assertEqual([], result)
+
+    def test_load_instance_from_model_no_args(self):
+        model = TestModel(id=1, test_str="Hello", test_int=1234)
+        instance = TestClass.get_instance_from_model(model)
+        self.assertEqual(1, instance.id)
+        self.assertEqual("Hello", instance.test_str)
+        self.assertEqual(1234, instance.test_int)
+
+    def test_load_instance_from_model_both_args(self):
+        model = TestModel(id=1, test_str="Hello", test_int=1234)
+        args = ["Test_arg"]
+        kwargs = {"arg1": "hi"}
+        instance = TestClass.get_instance_from_model(model,
+                                                     init_args=args,
+                                                     init_kwargs=kwargs)
+        self.assertIn(args[0], instance.args)
+        self.assertEqual(kwargs, instance.kwargs)
 
 
 class TestPillarDatastoreMixInRelationships(TestCase):
