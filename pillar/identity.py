@@ -2,27 +2,24 @@ from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import Config
 from .exceptions import WrongMessageType, WontUpdateToStaleKey
-from .ipfs import IPFSClient
 from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
-from .db import PillarDatastoreMixIn, NodeIdentity
+from .db import PillarDBObject, NodeIdentity
 from uuid import uuid4
 import logging
 from pathos.helpers import mp as multiprocessing
 
 
-class LocalIdentity(KeyManagerCommandQueueMixIn,
-                    multiprocessing.Process,
-                    PillarDatastoreMixIn):
+class LocalIdentity(PillarDBObject,
+                    KeyManagerCommandQueueMixIn,
+                    multiprocessing.Process):
     def __init__(self,
                  config: Config, *args):
         self.public_key_cid = None
         self.config = config
-        self.ipfs = IPFSClient()
         self.channel_manager = None
-        KeyManagerCommandQueueMixIn.__init__(self)
-        multiprocessing.Process.__init__(self)
+        super().__init__()
 
     def start_channel_manager(self):
         if self.channel_manager is None:

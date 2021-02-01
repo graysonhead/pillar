@@ -7,8 +7,7 @@ import asyncio
 from .ipfs import IPFSClient
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
-    MessageCouldNotBeVerified, KeyTypeAlreadyPresent, \
-    QueueCommandOutputTimeout
+    MessageCouldNotBeVerified, KeyTypeAlreadyPresent
 from .db import PillarDataStore
 from enum import Enum
 from uuid import uuid4
@@ -478,14 +477,14 @@ class KeyManagerCommandQueueMixIn:
             setattr(self, command, KeyManagerCommandCallable(command, self))
 
     def get_command_output(self, uuid):
-        wdt = CommandWDT()
-        wdt.start()
+        # wdt = CommandWDT()
+        # wdt.start()
         self.logger.debug("waiting for command output")
         ret = None
         found = False
         while not found:
-            if wdt.alarm.is_set():
-                raise QueueCommandOutputTimeout
+            # if wdt.alarm.is_set():
+            #     raise QueueCommandOutputTimeout
             try:
                 output = KeyManager.output_queue.get_nowait()
                 for id, output in output.items():

@@ -4,6 +4,10 @@ from sqlalchemy import create_engine, \
     String, \
     BLOB, \
     ForeignKey
+from .multiproc import PillarThreadMethodsRegister, \
+    PillarThreadMixIn, \
+    PillarWorkerThread, \
+    MixedClass
 from sqlalchemy_utils.functions import database_exists
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -11,7 +15,12 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.properties import ColumnProperty
 from .config import Config
 from pgpy import PGPKeyring, PGPKey
+from contextlib import contextmanager
+from multiprocessing import Queue, Event
 import logging
+
+pillar_db_register = PillarThreadMethodsRegister()
+
 
 Base = declarative_base()
 
@@ -56,31 +65,10 @@ class Invitation(Base):
     key = relationship("Key", uselist=False, back_populates='invitation')
 
 
-class PillarDB:
-    """
-    This class generates new sessions with the get_session() method
-    """
-
-    def __init__(self, config: Config):
-        self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
-        self.engine = self._get_engine(self.db_uri)
-        self.session_constructor = sessionmaker(bind=self.engine)
-
-    def _get_sqlite_uri(self, path: str):
-        absolute_path = path
-        return f"sqlite:///{absolute_path}"
-
-    def _get_engine(self, uri: str):
-        return create_engine(uri)
-
-    def get_session(self):
-        return self.session_constructor()
-
-
 class PillarDataStore:
 
     def __init__(self, config: Config):
-        self.pdb = PillarDB(config)
+        self.pdb = PillarDBWorker(config)
         self.logger = logging.getLogger(self.__repr__())
 
     def get_session(self):
@@ -168,8 +156,88 @@ class PillarDataStore:
         self.create_database()
 
 
-class PillarDatastoreMixIn:
+class PillarDBWorker(PillarWorkerThread):
+    """
+    This class generates new sessions with the get_session() method
+    """
+    command_queue = Queue()
+    output_queue = Queue()
+    shutdown_callback = Event()
+    methods_register = pillar_db_register
+
+    def __init__(self, config: Config):
+        self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
+        self.engine = self._get_engine(self.db_uri)
+        self.session_constructor = sessionmaker(bind=self.engine)
+        super().__init__()
+
+    def _get_sqlite_uri(self, path: str):
+        absolute_path = path
+        return f"sqlite:///{absolute_path}"
+
+    def _get_engine(self, uri: str):
+        return create_engine(uri)
+
+    def get_session(self):
+        return self.session_constructor()
+
+    @contextmanager
+    def get_scoped_session(self):
+        session = self.get_session()
+        try:
+            yield session
+            session.commit()
+        except:  # noqa E772
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @pillar_db_register.register_method
+    def add_item(self, item):
+        with self.get_scoped_session() as session:
+            session.merge(item)
+
+    @pillar_db_register.register_method
+    def get_all(self, model, expunge: bool = True):
+        with self.get_scoped_session() as session:
+            records = session.query(model).all()
+            session.expunge_all()
+            return records
+
+    @pillar_db_register.register_method
+    def get_keys(self) -> list:
+        with self.get_scoped_session() as session:
+            keys = session.query(Key).all()
+            deserialized_keys = []
+            for key in keys:
+                deserialized_key, other = PGPKey.from_blob(key.key)
+                deserialized_keys.append(deserialized_key)
+            return deserialized_keys
+
+    @pillar_db_register.register_method
+    def save_key(self, key: PGPKey):
+        with self.get_scoped_session() as session:
+            self.logger.info(f"Storing key {key.fingerprint} in database")
+            key_item = Key(fingerprint=key.fingerprint, key=bytes(key))
+            session.add(key_item)
+
+
+class DBMixIn(PillarThreadMixIn):
+    queue_thread_class = PillarDBWorker
+    interface_name = "db"
+
+
+class DBInterface(DBMixIn,
+                  metaclass=MixedClass):
+    pass
+
+
+class PillarDBObject:
     model = None
+
+    def __init__(self):
+        self.interface = DBInterface()
 
     def _pds_generate_model(self):
         attribute_dict = {}
@@ -188,13 +256,19 @@ class PillarDatastoreMixIn:
                     attribs.append(attribute)
         return attribs
 
-    def pds_save(self, pds: PillarDataStore):
+    def pds_save(self):
         model_instance = self._pds_generate_model()
-        pds.store_instance(model_instance)
+        self.interface.db.add_item(model_instance)
 
     @classmethod
-    def _load_model_instances_from_db(cls, pds: PillarDataStore):
-        return pds.load_model_instances(cls.model)
+    def _load_model_instances_from_db(cls, expunge: bool = True,
+                                      return_interface=False):
+        temp_interface = DBInterface()
+        model_instance = temp_interface.db.get_all(cls.model, expunge=expunge)
+        if not return_interface:
+            return model_instance
+        else:
+            return model_instance, temp_interface
 
     @classmethod
     def get_instance_from_model(cls, model,
@@ -215,11 +289,11 @@ class PillarDatastoreMixIn:
 
     @classmethod
     def load_all_from_db(cls,
-                         pds: PillarDataStore,
                          init_args: list = None,
-                         init_kwargs: dict = None):
+                         init_kwargs: dict = None,
+                         expunge: bool = True,):
         instance_list = []
-        for model in cls._load_model_instances_from_db(pds):
+        for model in cls._load_model_instances_from_db(expunge=expunge):
             instance_list.append(cls.get_instance_from_model(
                 model,
                 init_args=init_args,
