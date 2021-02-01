@@ -1,7 +1,6 @@
-from uuid import uuid4
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
     PillarThreadMethodsRegister
-from .db import PillarDBObject, NodeIdentity, NodeIdentity, PrimaryIdentity
+from .db import PillarDBObject, NodeIdentity, PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import Config
@@ -9,8 +8,6 @@ from .exceptions import WrongMessageType, WontUpdateToStaleKey
 from .IPRPC.cid_messenger import CIDMessenger
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
-from .multiproc import PillarWorkerThread, PillarThreadMixIn,\
-    PillarThreadMethodsRegister
 from uuid import uuid4
 import logging
 
@@ -45,9 +42,8 @@ class LocalIdentity(PillarDBObject,
             "get_user_primary_key_cid")
 
         self.create_peer_channels()
-        if self.channel_manager is not None:
-            self.channel_manager.start_channels()
-        PillarWorkerThread.run(self)
+        self.channel_manager.start_channels()
+        super().run()
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
@@ -126,21 +122,18 @@ class Node(LocalIdentity):
         return f"<Node: {self.fingerprint}>"
 
 
-class PrimaryIdentityMethods(PillarThreadMethodsRegister):
-    pass
+primary_identity_methods = PillarThreadMethodsRegister()
 
 
 class Primary(LocalIdentity):
     model = PrimaryIdentity
-    methods_register_class = PrimaryIdentityMethods
+    methods_register = primary_identity_methods
 
     def __init__(self, *args):
         self.key_type = PillarKeyType.USER_PRIMARY_KEY
-        self.methods_register_class = PrimaryIdentityMethods
-
         super().__init__(*args)
 
-    @PrimaryIdentityMethods.register_method
+    @primary_identity_methods.register_method
     def bootstrap(self, name, email):
         self.key_manager_command("generate_user_primary_key", name, email)
         self.key_manager_command("generate_local_node_subkey")

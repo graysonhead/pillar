@@ -143,7 +143,6 @@ class PillarThreadInterface:
 
     def setup_command_methods(self):
         for command in self.method_register.get_methods():
-            print(command)
             setattr(self, command, PillarThreadCommandCallable(command, self))
 
     def command(self, command_name: str, *args, **kwargs):

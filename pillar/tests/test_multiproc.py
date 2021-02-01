@@ -99,12 +99,8 @@ class TestMultiProcBehavior(asynctest.TestCase):
 
     def test_exit_behavior(self):
         self.instance.shutdown_callback.set = MagicMock()
-        self.instance.join = MagicMock()
-        self.instance.close = MagicMock()
         self.instance.exit()
         self.instance.shutdown_callback.set.assert_called()
-        self.instance.join.assert_called()
-        self.instance.close.assert_called()
 
 
 class TestMultiProc(asynctest.TestCase):

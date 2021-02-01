@@ -4,14 +4,14 @@ from pgpy.constants import PubKeyAlgorithm, \
 from pgpy.types import Fingerprint
 from .config import Config
 import asyncio
-from .ipfs import IPFSMixIn
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
 from .db import PillarDataStore
+from .interfaces import PillarInterfaces
+from .multiproc import PillarWorkerThread
 from enum import Enum
 from uuid import uuid4
-from pathos.helpers import mp as multiprocessing
 from queue import Empty
 import os
 import logging
@@ -61,17 +61,13 @@ class KeyManagerQueueMethods:
         return cls.methods
 
 
-class KeyManager(multiprocessing.Process, IPFSMixIn):
+class KeyManager(PillarWorkerThread):
     """
     Keymanager creates and manages the keys needed to operate a
     pillar instance and decrypt messages from peers and maintains
     the keyring used to validate and encrypt messages to peers.
     """
-    command_queue = multiprocessing.Queue()
-    output_queue = multiprocessing.Queue()
-    methods_register_class = KeyManagerQueueMethods
-
-    shutdown_callback = multiprocessing.Event()
+    methods_register = KeyManagerQueueMethods
 
     def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
@@ -93,8 +89,8 @@ class KeyManager(multiprocessing.Process, IPFSMixIn):
             self.import_peer_keys_from_database()
 
         self.queue_thread_class = self.__class__
-        multiprocessing.Process.__init__(self)
-        IPFSMixIn.__init__(self)
+        self.interfaces = PillarInterfaces()
+        super().__init__()
 
     async def run_queue_commands(self):
         while True:

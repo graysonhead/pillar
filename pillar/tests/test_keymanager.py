@@ -77,10 +77,6 @@ class TestEmptyKeyManager(TestCase):
         self.km = KeyManager(self.config, pds)
         self.km.start()
 
-    def tearDown(self):
-        self.km.exit()
-        self.km.join()
-
     def test_instantiate_keymanager_class(self):
         assert(isinstance(self.km, KeyManager))
 
