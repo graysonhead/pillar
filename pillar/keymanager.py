@@ -9,13 +9,13 @@ from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
 from .db import PillarDataStore
 from .interfaces import PillarInterfaces
-from .multiproc import PillarWorkerThread
+from .multiproc import PillarWorkerThread, PillarThreadMethodsRegister,\
+    PillarThreadMixIn, MixedClass
 from enum import Enum
 from uuid import uuid4
-from queue import Empty
 import os
 import logging
-import time
+from pathos.helpers import mp as multiprocessing
 
 
 class PillarKeyType(Enum):
@@ -48,17 +48,7 @@ class KeyOptions:
     key_expires = None
 
 
-class KeyManagerQueueMethods:
-    methods = {}
-
-    @classmethod
-    def register_method(cls, method: callable):
-        cls.methods.update({method.__name__: method})
-        return method
-
-    @classmethod
-    def get_methods(cls):
-        return cls.methods
+key_manager_methods = PillarThreadMethodsRegister()
 
 
 class KeyManager(PillarWorkerThread):
@@ -67,7 +57,10 @@ class KeyManager(PillarWorkerThread):
     pillar instance and decrypt messages from peers and maintains
     the keyring used to validate and encrypt messages to peers.
     """
-    methods_register = KeyManagerQueueMethods
+    command_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    shutdown_callback = multiprocessing.Event()
+    methods_register = key_manager_methods
 
     def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
@@ -92,47 +85,14 @@ class KeyManager(PillarWorkerThread):
         self.interfaces = PillarInterfaces()
         super().__init__()
 
-    async def run_queue_commands(self):
-        while True:
-            try:
-                command = self.command_queue.get_nowait()
-                args = command["args"]
-                kwargs = command["kwargs"]
-                output = KeyManagerQueueMethods.\
-                    methods[command["command_name"]](
-                        self,
-                        *args,
-                        **kwargs)
-                try:
-                    self.output_queue.put(
-                        {command["id"]: output})
-                except ValueError:
-                    self.output_queue.put(
-                        {command["id"]: str(output)})
-                await asyncio.sleep(0.01)
-            except Empty:
-                await asyncio.sleep(0.01)
-            if self.shutdown_callback.is_set():
-                loop = asyncio.get_running_loop()
-                loop.stop()
-                break
-
-    def run(self):
-        self.loop = asyncio.get_event_loop()
-        asyncio.ensure_future(self.run_queue_commands())
-        self.loop.run_forever()
-
-    def exit(self):
-        self.shutdown_callback.set()
-
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def import_or_update_peer_key(self, cid):
         try:
             return self.import_peer_key_from_cid(cid)
         except CannotImportSamePrimaryFingerprint:
             return self.update_peer_key(cid)
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def import_peer_key_from_cid(self, cid):
         """
         Import a new key into the keyring from ipfs cid
@@ -261,7 +221,7 @@ class KeyManager(PillarWorkerThread):
         if not os.path.isfile(
                 os.path.join(self.config.get_value('ipfs_directory'), cid)):
             self.logger.info(f"Getting cid from ipfs: {cid}")
-            self.ipfs.get_file(
+            self.interfaces.ipfs.get_file(
                 cid, dstdir=self.config.get_value('ipfs_directory'))
 
     def generate_primary_key(self, uid: pgpy.PGPUID):
@@ -296,7 +256,7 @@ class KeyManager(PillarWorkerThread):
         self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def generate_user_primary_key(self, name: str, email: str):
         uid = pgpy.PGPUID.new(name,
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
@@ -308,7 +268,7 @@ class KeyManager(PillarWorkerThread):
         cid = self.add_key_message_to_ipfs(key.pubkey)
         self.set_user_primary_key_cid(cid)
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def generate_local_node_subkey(self):
         """
         This method creates the initial  subkey during the bootstrap
@@ -360,15 +320,16 @@ class KeyManager(PillarWorkerThread):
         message = pgpy.PGPMessage.new(
             str(key), compression=CompressionAlgorithm.Uncompressed)
         message |= self.user_primary_key.sign(message)
-        data = self.ipfs.add_str(str(message))
+        data = self.interfaces.ipfs.add_str(str(message))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
         self.user_primary_key_cid = data['Hash']
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
-        self.ipfs.get_file(cid,
-                           dstdir=self.config.get_value('ipfs_directory'))
+        self.interfaces.ipfs.get_file(
+            cid,
+            dstdir=self.config.get_value('ipfs_directory'))
 
     @staticmethod
     def get_value_and_requeue(dequeue):
@@ -376,7 +337,7 @@ class KeyManager(PillarWorkerThread):
         dequeue.append(val)
         return val
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def get_keys(self):
         keys = []
         for fingerprint in self.keyring.fingerprints():
@@ -384,14 +345,14 @@ class KeyManager(PillarWorkerThread):
                 keys.append(key)
         return keys
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def get_peer_primary_key_from_subkey_fingerprint(self,
                                                      subkey_fingerprint: str):
         primary_fingerprint = \
             self.key_manager.peer_subkey_map[subkey_fingerprint]
         return self.get_key_from_keyring(primary_fingerprint)
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def get_private_key_for_key_type(self, key_type: PillarKeyType):
         key_type_map = {PillarKeyType.USER_PRIMARY_KEY: self.user_primary_key,
                         PillarKeyType.REGISTRATION_PRIMARY_KEY:
@@ -399,17 +360,17 @@ class KeyManager(PillarWorkerThread):
                         PillarKeyType.NODE_SUBKEY: self.node_subkey}
         return key_type_map[key_type]
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def get_key_from_keyring(self, fingerprint: str):
         with self.key_manager.keyring.key(fingerprint) as \
                 peer_primary_key:
             return peer_primary_key
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def get_user_primary_key_cid(self):
         return self.user_primary_key_cid
 
-    @ KeyManagerQueueMethods.register_method
+    @ key_manager_methods.register_method
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
 
@@ -440,42 +401,17 @@ class KeyManagerCommandCallable:
                                                         *args, **kwargs)
 
 
-class KeyManagerCommandQueueMixIn:
-
-    def __init__(self):
-        self.logger = logging.getLogger("<KeyManagerCommandQueueMixIn>")
-        self.setup_keymanager_methods()
-
-    def key_manager_command(self, command_name: str, *args, **kwargs):
-        command = QueueCommand(command_name, *args, **kwargs)
-        self.logger.debug(f"running command id {command.id}")
-
-        KeyManager.command_queue.put(command.__dict__())
-        return self.get_command_output(command.id)
-
-    def setup_keymanager_methods(self):
-        for command in KeyManagerQueueMethods.get_methods():
-            setattr(self, command, KeyManagerCommandCallable(command, self))
-
-    def get_command_output(self, uuid):
-        self.logger.debug("waiting for command output")
-        ret = None
-        found = False
-        while not found:
-            try:
-                output = KeyManager.output_queue.get_nowait()
-                for id, output in output.items():
-                    if id == uuid:
-                        ret = output
-                        found = True
-                    else:
-                        KeyManager.output_queue.put({id: output})
-            except Empty:
-                time.sleep(.01)
-        return ret
+class KeyManagerCommandQueueMixIn(PillarThreadMixIn):
+    queue_thread_class = KeyManager
+    interface_name = "key_manager"
 
 
-class EncryptionHelper(KeyManagerCommandQueueMixIn):
+class EncryptionHelperInterface(KeyManagerCommandQueueMixIn,
+                                metaclass=MixedClass):
+    pass
+
+
+class EncryptionHelper:
     """
     EncryptionHelper provides a simple interface for common encryption
     tasks that involve the use of pillar's other web of trust facilities
@@ -485,11 +421,11 @@ class EncryptionHelper(KeyManagerCommandQueueMixIn):
         self.logger = logging.getLogger(
             f'<{self.__class__.__name__}>')
         self.keytype = keytype
+        self.interface = EncryptionHelperInterface()
         super().__init__()
 
-        self.local_key = self.key_manager_command(
-            "get_private_key_for_key_type",
-            self.keytype)
+        self.local_key = self.interface.key_manager.\
+            get_private_key_for_key_type(self.keytype)
 
     def sign_and_encrypt_string_to_peer_fingerprint(self,
                                                     message: str,
@@ -497,9 +433,8 @@ class EncryptionHelper(KeyManagerCommandQueueMixIn):
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
 
-        peer_key = self.key_manager_command(
-            "get_peer_primary_key_from_subkey_fingerprint",
-            remote_keyid)
+        peer_key = self.interface.key_manager.\
+            get_peer_primary_key_from_subkey_fingerprint(remote_keyid)
 
         peer_subkey = None
         for _, key in peer_key._children.items():
@@ -524,9 +459,8 @@ class EncryptionHelper(KeyManagerCommandQueueMixIn):
 
         signer = unverified_message.signers.pop()
 
-        peer_pubkey = self.key_manager_command(
-            "get_peer_primary_key_from_subkey_fingerprint",
-            signer)
+        peer_pubkey = self.interface.key_manager.\
+            get_peer_primary_key_from_subkey_fingerprint(signer)
 
         if peer_pubkey.verify(unverified_message):
             verified_message = unverified_message

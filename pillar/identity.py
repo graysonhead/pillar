@@ -1,5 +1,5 @@
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
-    PillarThreadMethodsRegister
+    PillarThreadMethodsRegister, MixedClass
 from .db import PillarDBObject, NodeIdentity, PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
@@ -10,10 +10,14 @@ from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
 import logging
+import multiprocessing
+
+
+class IdentityInterface(KeyManagerCommandQueueMixIn, metaclass=MixedClass):
+    pass
 
 
 class LocalIdentity(PillarDBObject,
-                    KeyManagerCommandQueueMixIn,
                     PillarWorkerThread):
     def __init__(self,
                  config: Config, *args):
@@ -21,14 +25,14 @@ class LocalIdentity(PillarDBObject,
         self.public_key_cid = None
         self.config = config
         self.channel_manager = None
+        self.id_interface = IdentityInterface()
         super().__init__()
 
     def start_channel_manager(self):
         if self.channel_manager is None:
             self.logger.info('Starting channel manager.')
-            key = self.local_key = self.key_manager_command(
-                "get_private_key_for_key_type",
-                self.key_type)
+            key = self.local_key = self.id_interface.key_manager.\
+                get_private_key_for_key_type(self.key_type)
             if key is not None:
                 self.channel_manager = ChannelManager(
                     self.encryption_helper, key.fingerprint)
@@ -38,8 +42,8 @@ class LocalIdentity(PillarDBObject,
         self.encryption_helper = EncryptionHelper(self.key_type)
 
         self.start_channel_manager()
-        self.public_key_cid = self.key_manager_command(
-            "get_user_primary_key_cid")
+        self.public_key_cid = self.id_interface.key_manager.\
+            get_user_primary_key_cid()
 
         self.create_peer_channels()
         self.channel_manager.start_channels()
@@ -50,13 +54,11 @@ class LocalIdentity(PillarDBObject,
         invitation = CIDMessenger(
             self.encryption_helper,
             self.config).get_and_decrypt_message_from_cid(cid, verify=False)
-        peer_fingerprint = self.key_manager_command(
-            "import_peer_key_from_cid",
-            invitation.public_key_cid)
+        peer_fingerprint = self.id_interface.key_manager.\
+            import_peer_key_from_cid(invitation.public_key_cid)
         if not type(invitation) is InvitationMessage:
             raise WrongMessageType(type(invitation))
-        key = self.key_manager_command(
-            "get_key_from_keyring",
+        key = self.id_interface.key_manager.get_key_from_keyring(
             peer_fingerprint)
         self.channel_manager.add_peer(key, invitation)
 
@@ -64,8 +66,8 @@ class LocalIdentity(PillarDBObject,
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(
             peer_fingerprint_cid)
         try:
-            self.key_manager_command("import_or_update_peer_key",
-                                     pubkey_cid)
+            self.id_interface.key_manager.import_or_update_peer_key(
+                pubkey_cid)
         except WontUpdateToStaleKey:
             pass
         invitation = InvitationMessage(
@@ -92,20 +94,27 @@ class LocalIdentity(PillarDBObject,
 
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
-            public_key_cid=self.key_manager_command(
-                "get_user_primary_key_cid"),
-            fingerprint=str(self.fingerprint))
+            public_key_cid=self.id_interface.key_manager.
+            get_user_primary_key_cid(
+                fingerprint=str(self.fingerprint)))
         return CIDMessenger(
             self.encryption_helper,
             self.config).add_unencrypted_message_to_ipfs(message)
 
     def create_peer_channels(self):
-        for key in self.key_manager_command("get_keys"):
+        for key in self.id_interface.key_manager.get_keys():
             self.channel_manager.add_peer(key)
+
+
+node_identity_methods = PillarThreadMethodsRegister()
 
 
 class Node(LocalIdentity):
     model = NodeIdentity
+    methods_register = node_identity_methods
+    command_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    shutdown_callback = multiprocessing.Event()
 
     def __init__(self, *args,
                  id: int = None,
@@ -116,6 +125,7 @@ class Node(LocalIdentity):
         self.key_type = PillarKeyType.NODE_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
+        multiprocessing.Process.__init__(self)
         super().__init__(*args)
 
     def __repr__(self):
@@ -128,19 +138,23 @@ primary_identity_methods = PillarThreadMethodsRegister()
 class Primary(LocalIdentity):
     model = PrimaryIdentity
     methods_register = primary_identity_methods
+    command_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    shutdown_callback = multiprocessing.Event()
 
     def __init__(self, *args):
         self.key_type = PillarKeyType.USER_PRIMARY_KEY
+        multiprocessing.Process.__init__(self)
         super().__init__(*args)
 
-    @primary_identity_methods.register_method
+    @ primary_identity_methods.register_method
     def bootstrap(self, name, email):
-        self.key_manager_command("generate_user_primary_key", name, email)
-        self.key_manager_command("generate_local_node_subkey")
-        self.public_key_cid = self.key_manager_command(
-            "get_user_primary_key_cid"),
-        self.key = self.key_manager_command("get_private_key_for_key_type",
-                                            self.key_type)
+        self.id_interface.key_manager.generate_user_primary_key(name, email)
+        self.id_interface.key_manager.generate_local_node_subkey()
+        self.public_key_cid = self.id_interface.\
+            key_manager.get_user_primary_key_cid()
+        self.key = self.id_interface.key_manager.get_private_key_for_key_type(
+            self.key_type)
         self.fingerprint = self.key.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.start_channel_manager()

@@ -4,17 +4,25 @@ from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
 from pillar.identity import PrimaryIdentityMixIn, Primary
 from pillar.ipfs import IPFSWorker
+from pillar.multiproc import MixedClass
 from pathlib import Path
 import os
 import sys
+import logging
 
 
-class Bootstrapper(KeyManagerCommandQueueMixIn,
-                   PrimaryIdentityMixIn):
+class BootstrapInterface(KeyManagerCommandQueueMixIn,
+                         PrimaryIdentityMixIn,
+                         metaclass=MixedClass):
+    pass
+
+
+class Bootstrapper:
 
     def __init__(self,
                  args: Namespace,
                  ):
+        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
         self.planned_steps = []
         self.args = args
         self.pds = None
@@ -23,8 +31,7 @@ class Bootstrapper(KeyManagerCommandQueueMixIn,
         self.config = None
         self.user_key_name = None
         self.user_key_email = None
-        KeyManagerCommandQueueMixIn.__init__(self)
-        PrimaryIdentityMixIn.__init__(self)
+        self.interface = BootstrapInterface()
 
     def bootstrap(self):
         self.bootstrap_pre()
@@ -104,8 +111,8 @@ class Bootstrapper(KeyManagerCommandQueueMixIn,
         primary_worker.start()
 
         self.logger.info("Bootstrapping primary identity.")
-        self.primary_identity.bootstrap(self.user_key_name,
-                                        self.user_key_email)
+        self.interface.primary_identity.bootstrap(self.user_key_name,
+                                                  self.user_key_email)
 
         self.logger.info("Stopping primary identity worker")
         primary_worker.exit()
