@@ -29,9 +29,11 @@ class Bootstrapper:
         self.key_manager = None
         self.config_path = None
         self.config = None
-        self.user_key_name = None
-        self.user_key_email = None
+        self.user_key_name = self.args.user_name or self.user_name_prompt()
+        self.user_key_email = self.args.email or self.email_prompt()
+        self.defaults = self.args.defaults
         self.interface = BootstrapInterface()
+        self.bootstrap()
 
     def bootstrap(self):
         self.bootstrap_pre()
@@ -72,6 +74,30 @@ class Bootstrapper:
         self.pds.create_database(purge=self.args.purge)
         print("Database created")
 
+    def user_name_prompt(self):
+        i = 3
+        while i > 0:
+            i -= 1
+            user_name = input("Please type your full name for key "
+                              "generation: ")
+            if user_name == '':
+                print("Name field cannot be blank")
+            else:
+                return user_name
+        exit(1)
+
+    def email_prompt(self):
+        i = 3
+        while i > 0:
+            i -= 1
+            email = input("Please type your email address for key "
+                          "generation: ")
+            if email == '':
+                print("Email field cannot be blank")
+            else:
+                return email
+        exit(1)
+
     def bootstrap_keymanager_pre(self) -> KeyManager:
         keymanager = KeyManager(self.config, self.pds, db_import=False)
         if keymanager.node_subkey is not None:
@@ -82,19 +108,6 @@ class Bootstrapper:
                 )
             else:
                 pass
-        user_name = input("Please type your full name for key generation: ")
-        if not user_name:
-            print("Name field cannot be blank")
-            sys.exit(1)
-        else:
-            self.user_key_name = user_name
-        user_email = input(
-            "Please type your e-mail address for key generation: "
-        )
-        if not user_email:
-            print("Email field cannot be blank")
-        else:
-            self.user_key_email = user_email
 
         return keymanager
 
@@ -148,14 +161,15 @@ class Bootstrapper:
         print("The following questions will generate the config file for "
               "pillar, you can press enter to accept the defaults (shown "
               "in brackets.)")
-        for option in config_obj.options:
-            description = option.description or option.attribute
-            opt_response = input(f"{description} "
-                                 f"[{option.default_value}]: ")
-            if opt_response:
-                # Set the type of the input to a valid one
-                opt_response = option.valid_types[0](opt_response)
-                config_obj.set_value(option.attribute, opt_response)
+        if not self.defaults:
+            for option in config_obj.options:
+                description = option.description or option.attribute
+                opt_response = input(f"{description} "
+                                     f"[{option.default_value}]: ")
+                if opt_response:
+                    # Set the type of the input to a valid one
+                    opt_response = option.valid_types[0](opt_response)
+                    config_obj.set_value(option.attribute, opt_response)
         step = f"We will create a config file at {str(config_path)} with " \
             f"contents: \n{config_obj.generate_yaml()}\n"
         self.planned_steps.append(step)

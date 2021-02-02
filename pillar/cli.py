@@ -23,7 +23,7 @@ class CLI:
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
-            self.bootstrap()
+            Bootstrapper(self.args)
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
                 self.config,
@@ -54,18 +54,21 @@ class CLI:
             print("No subcommand provided")
             sys.exit(1)
 
-    def bootstrap(self):
-        bootstrap = Bootstrapper(
-            self.args
-        )
-        bootstrap.bootstrap()
-
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers(dest="sub_command")
         bootstrap = subparsers.add_parser("bootstrap",
                                           help="Bootstrap a pillar node",
                                           )
+        bootstrap.add_argument("--defaults",
+                               help="Accept all of pillar's default options",
+                               action='store_true')
+        bootstrap.add_argument("--user-name", help="Full name of the person "
+                               "whose pillar user is being bootstrapped")
+
+        bootstrap.add_argument("--email", help="Email address of the person "
+                               "whose pillar user is being bootstrapped")
+
         subparsers.add_parser("daemon",
                               help="Run pillar daemon")
         key = subparsers.add_parser("identity",
