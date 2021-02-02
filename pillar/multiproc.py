@@ -109,12 +109,19 @@ class PillarWorkerThread(Process):
             except Empty:
                 await asyncio.sleep(0.01)
             if self.shutdown_callback.is_set():
+                self.shutdown_routine()
                 if self.loop:
                     self.loop.stop()
                 break
 
     def exit(self, timeout: int = 5):
         self.shutdown_callback.set()
+
+    def shutdown_routine(self):
+        """
+        Override to run last minute commnands from within the child
+        process.
+        """
 
     def run(self):
         """

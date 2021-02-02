@@ -24,6 +24,7 @@ class CLI:
     def run(self):
         if self.args.sub_command == 'bootstrap':
             Bootstrapper(self.args)
+            exit(0)
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
                 self.config,

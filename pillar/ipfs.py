@@ -29,7 +29,7 @@ class IPFSClient:
         client = self.get_client()
         result = await client.add_str(*args, **kwargs)
         await client.close()
-        return result, client
+        return result
 
     async def send_pubsub_message(self, queue_id: str, message: str) -> None:
         client = self.get_client()

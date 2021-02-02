@@ -5,7 +5,7 @@ from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import Config
 from .exceptions import WrongMessageType, WontUpdateToStaleKey
-from .IPRPC.cid_messenger import CIDMessenger
+from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
@@ -13,7 +13,9 @@ import logging
 import multiprocessing
 
 
-class IdentityInterface(KeyManagerCommandQueueMixIn, metaclass=MixedClass):
+class IdentityInterface(KeyManagerCommandQueueMixIn,
+                        CIDMessengerMixIn,
+                        metaclass=MixedClass):
     pass
 
 
@@ -25,6 +27,7 @@ class LocalIdentity(PillarDBObject,
         self.public_key_cid = None
         self.config = config
         self.channel_manager = None
+        self.cid_messenger_instance = None
         self.id_interface = IdentityInterface()
         super().__init__()
 
@@ -41,6 +44,11 @@ class LocalIdentity(PillarDBObject,
     def run(self):
         self.encryption_helper = EncryptionHelper(self.key_type)
 
+        self.cid_messenger_instance = CIDMessenger(
+            self.encryption_helper,
+            self.config)
+        self.cid_messenger_instance.start()
+
         self.start_channel_manager()
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
@@ -49,11 +57,13 @@ class LocalIdentity(PillarDBObject,
         self.channel_manager.start_channels()
         super().run()
 
+    def shutdown_routine(self):
+        self.cid_messenger_instance.exit()
+
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
-        invitation = CIDMessenger(
-            self.encryption_helper,
-            self.config).get_and_decrypt_message_from_cid(cid, verify=False)
+        invitation = self.id_interface.cid_messenger.\
+            get_and_decrypt_message_from_cid(cid, verify=False)
         peer_fingerprint = self.id_interface.key_manager.\
             import_peer_key_from_cid(invitation.public_key_cid)
         if not type(invitation) is InvitationMessage:
@@ -78,15 +88,14 @@ class LocalIdentity(PillarDBObject,
         )
         self.logger.info(
             f'Creating invitation for peer {peer_fingerprint_cid}')
-        return CIDMessenger(self.encryption_helper, self.config).\
+        return self.id_interface.cid_messenger.\
             add_encrypted_message_to_ipfs_for_peer(invitation, fingerprint)
 
     def _get_info_from_fingerprint_cid(self, fingerprint_cid):
         self.logger.info(
             f'Getting peer fingerprint info from cid: {fingerprint_cid}')
-        fingerprint_info = CIDMessenger(
-            self.encryption_helper,
-            self.config).get_unencrypted_message_from_cid(fingerprint_cid)
+        fingerprint_info = self.id_interface.cid_messenger.\
+            get_unencrypted_message_from_cid(fingerprint_cid)
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
 
@@ -95,11 +104,10 @@ class LocalIdentity(PillarDBObject,
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
             public_key_cid=self.id_interface.key_manager.
-            get_user_primary_key_cid(
-                fingerprint=str(self.fingerprint)))
-        return CIDMessenger(
-            self.encryption_helper,
-            self.config).add_unencrypted_message_to_ipfs(message)
+            get_user_primary_key_cid(),
+            fingerprint=str(self.fingerprint))
+        return self.id_interface.cid_messenger.add_unencrypted_message_to_ipfs(
+            message)
 
     def create_peer_channels(self):
         for key in self.id_interface.key_manager.get_keys():
