@@ -45,10 +45,8 @@ class CLI:
 
             if self.args.identity_command == 'create_invitation':
                 node.create_invitation(self.args.peer_fingerprint_cid)
-                pass
             elif self.args.identity_command == 'fingerprint_cid':
-                # TODO
-                pass
+                print(node.fingerprint_cid)
             elif self.args.identity_command == 'accept_invitation':
                 # TODO
                 pass

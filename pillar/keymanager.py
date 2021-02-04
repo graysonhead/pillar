@@ -7,7 +7,7 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDataStore
+from .db import PillarDataStore, PillarDBWorker
 from .interfaces import PillarInterfaces
 from .multiproc import PillarWorkerThread, PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
@@ -84,6 +84,13 @@ class KeyManager(PillarWorkerThread):
         self.queue_thread_class = self.__class__
         self.interfaces = PillarInterfaces()
         super().__init__()
+
+    def pre_run(self):
+        self.db_worker_instance = PillarDBWorker(self.config)
+        self.db_worker_instance.start()
+
+    def shutdown_routine(self):
+        self.db_worker_instance.exit()
 
     @ key_manager_methods.register_method
     def import_or_update_peer_key(self, cid):
