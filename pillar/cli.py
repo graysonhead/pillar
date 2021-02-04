@@ -6,7 +6,7 @@ from pillar.identity import Node
 from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
 from pillar.keymanager import KeyManager
-from pillar.db import PillarDataStore, PillarDBWorker
+from pillar.db import PillarDataStore
 from pathlib import Path
 import sys
 
@@ -54,7 +54,7 @@ class CLI:
                 pass
             elif self.args.identity_command == 'show_fingerprints':
                 print("Local Fingerprints:")
-                print(f"Node: {nodes[0].fingerprint}")
+                print(f"Node: {node.fingerprint}")
                 print(f"Peers: {self.key_manager.keyring.fingerprints()}")
         else:
             print("No subcommand provided")

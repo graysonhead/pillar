@@ -7,7 +7,6 @@ from .messages import IPRPCRegistry, IPRPCMessage
 import pgpy
 import logging
 import os
-import asyncio
 import multiprocessing as mp
 
 cid_messenger_register = PillarThreadMethodsRegister()
