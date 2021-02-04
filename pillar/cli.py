@@ -44,12 +44,11 @@ class CLI:
             node.start()
 
             if self.args.identity_command == 'create_invitation':
-                node.create_invitation(self.args.peer_fingerprint_cid)
+                print(node.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
                 print(node.fingerprint_cid)
             elif self.args.identity_command == 'accept_invitation':
-                # TODO
-                pass
+                node.receive_invitation_by_cid(self.args.invitation_cid)
             elif self.args.identity_command == 'show_fingerprints':
                 print("Local Fingerprints:")
                 print(f"Node: {node.fingerprint}")

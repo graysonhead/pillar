@@ -49,7 +49,6 @@ class LocalIdentity(PillarDBObject,
             self.config)
         self.cid_messenger_instance.start()
 
-        self.start_channel_manager()
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
         self.db_worker_instance = PillarDBWorker(self.config)
@@ -141,9 +140,10 @@ class Node(LocalIdentity):
         super().__init__(*args)
 
     def pre_run(self):
+        super().pre_run()
+        self.start_channel_manager()
         self.create_peer_channels()
         self.channel_manager.start_channels()
-        super().pre_run()
 
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
