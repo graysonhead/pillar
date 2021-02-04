@@ -1,6 +1,6 @@
 from ..config import Config
 from ..keymanager import EncryptionHelper
-from ..ipfs import IPFSMixIn
+from ..ipfs import IPFSMixIn, IPFSWorker
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
 from .messages import IPRPCRegistry, IPRPCMessage
@@ -33,6 +33,14 @@ class CIDMessenger(PillarWorkerThread):
         self.loop = asyncio.get_event_loop()
         self.interface = CIDMessengerInterface()
         super().__init__()
+
+    def run(self):
+        self.ipfs_worker_instance = IPFSWorker(str(self))
+        self.ipfs_worker_instance.start()
+        super().run()
+
+    def shutdown_routine(self):
+        self.ipfs_worker_instance.exit()
 
     @cid_messenger_register.register_method
     def get_and_decrypt_message_from_cid(self, cid: str, verify: bool = True):

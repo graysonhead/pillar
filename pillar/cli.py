@@ -5,6 +5,8 @@ import logging
 from pillar.identity import Node
 from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
+from pillar.keymanager import KeyManager
+from pillar.db import PillarDataStore, PillarDBWorker
 from pathlib import Path
 import sys
 
@@ -34,12 +36,19 @@ class CLI:
             )
             daemon.start()
         elif self.args.sub_command == 'identity':
-            nodes = Node.load_all_from_db(
-                self.pds,
-                init_args=[self.key_manager, self.config]
-            )
+            pds = PillarDataStore(self.config)
+            key_manager = KeyManager(self.config, pds)
+            key_manager.start()
+            db_worker_instance = PillarDBWorker(self.config)
+            db_worker_instance.start()
+
+            node = Node.get_local_instance(self.config, pds)
+            node.start()
+            print("started!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
             if self.args.identity_command == 'create_invitation':
-                # TODO
+                node.create_invitation(self.args.peer_fingerprint_cid)
+                print("created????????????????????????????????????????")
                 pass
             elif self.args.identity_command == 'fingerprint_cid':
                 # TODO
@@ -54,6 +63,8 @@ class CLI:
         else:
             print("No subcommand provided")
             sys.exit(1)
+        pillar_db_worker.exit()
+        key_manager.exit()
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()

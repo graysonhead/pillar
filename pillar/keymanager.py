@@ -87,6 +87,7 @@ class KeyManager(PillarWorkerThread):
 
     @ key_manager_methods.register_method
     def import_or_update_peer_key(self, cid):
+        print("made it here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         try:
             return self.import_peer_key_from_cid(cid)
         except CannotImportSamePrimaryFingerprint:
@@ -99,8 +100,7 @@ class KeyManager(PillarWorkerThread):
         """
         peer_key_message = self.get_key_message_by_cid(cid)
         peer_key, other = pgpy.PGPKey.from_blob(peer_key_message.message)
-        with open(f'pillar/tests/data/{cid}', 'w+') as f:
-            f.write(str(peer_key_message))
+
         return self.import_peer_key(peer_key)
 
     def import_peer_keys_from_database(self):

@@ -45,8 +45,7 @@ class Key(Base):
 
 class PrimaryIdentity(Base):
     __tablename__ = "primary_identities"
-    id = Column(Integer, primary_key=True)
-    cid = Column(String)
+    public_key_cid = Column(String, primary_key=True)
     fingerprint = Column(String)
     fingerprint_cid = Column(String)
 
@@ -54,7 +53,7 @@ class PrimaryIdentity(Base):
 class NodeIdentity(Base):
     __tablename__ = "node_identities"
     id = Column(Integer, primary_key=True)
-    cid = Column(String)
+    public_key_cid = Column(String)
     fingerprint = Column(String)
     fingerprint_cid = Column(String)
 
@@ -197,7 +196,7 @@ class PillarDBWorker(PillarWorkerThread):
         return f"sqlite:///{absolute_path}"
 
     def _get_engine(self, uri: str):
-        return create_engine(uri)
+        return create_engine(uri, connect_args={"check_same_thread": False})
 
     def get_session(self):
         return self.session_constructor()

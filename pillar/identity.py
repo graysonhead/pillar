@@ -1,6 +1,7 @@
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
     PillarThreadMethodsRegister, MixedClass
-from .db import PillarDBObject, NodeIdentity, PrimaryIdentity
+from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
+    PrimaryIdentity, PillarDBWorker
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import Config
@@ -43,7 +44,6 @@ class LocalIdentity(PillarDBObject,
 
     def run(self):
         self.encryption_helper = EncryptionHelper(self.key_type)
-
         self.cid_messenger_instance = CIDMessenger(
             self.encryption_helper,
             self.config)
@@ -58,6 +58,7 @@ class LocalIdentity(PillarDBObject,
         super().run()
 
     def shutdown_routine(self):
+        self.db_worker_instance.exit()
         self.cid_messenger_instance.exit()
 
     def receive_invitation_by_cid(self, cid: str):
@@ -73,6 +74,7 @@ class LocalIdentity(PillarDBObject,
         self.channel_manager.add_peer(key, invitation)
 
     def create_invitation(self, peer_fingerprint_cid):
+        print("Made it here!!")
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(
             peer_fingerprint_cid)
         try:
@@ -112,6 +114,10 @@ class LocalIdentity(PillarDBObject,
     def create_peer_channels(self):
         for key in self.id_interface.key_manager.get_keys():
             self.channel_manager.add_peer(key)
+
+    @classmethod
+    def get_local_instance(cls, config: Config, pds: PillarDataStore):
+        return cls.load_all_from_db([config])[0]
 
 
 node_identity_methods = PillarThreadMethodsRegister()
@@ -166,6 +172,12 @@ class Primary(LocalIdentity):
         self.fingerprint = self.key.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.start_channel_manager()
+        node = Node(self.config)
+        node.fingerprint_cid = self.fingerprint_cid
+        node.fingerprint = self.fingerprint
+        node.public_key_cid = self.public_key_cid
+        node.pds_save()
+        self.pds_save()
         self.logger.info(
             f'Bootstrapped node with fingerprint: {self.fingerprint}')
 
