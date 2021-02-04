@@ -30,14 +30,12 @@ class CIDMessenger(PillarWorkerThread):
         self.logger.info("Starting CIDMessenger")
         self.encryption_helper = encryption_helper
         self.config = config
-        self.loop = asyncio.get_event_loop()
         self.interface = CIDMessengerInterface()
         super().__init__()
 
-    def run(self):
+    def pre_run(self):
         self.ipfs_worker_instance = IPFSWorker(str(self))
         self.ipfs_worker_instance.start()
-        super().run()
 
     def shutdown_routine(self):
         self.ipfs_worker_instance.exit()

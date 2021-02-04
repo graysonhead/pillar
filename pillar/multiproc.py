@@ -123,11 +123,15 @@ class PillarWorkerThread(Process):
         process.
         """
 
+    def pre_run(self):
+        """override to execute prior to process loop"""
+
     def run(self):
         """
         This runs the worker loop, and is called in a subprocess by the
         self.start() method
         """
+        self.pre_run()
         self.loop = asyncio.get_event_loop()
         asyncio.ensure_future(self.run_queue_commands())
         self.loop.run_forever()

@@ -39,16 +39,12 @@ class CLI:
             pds = PillarDataStore(self.config)
             key_manager = KeyManager(self.config, pds)
             key_manager.start()
-            db_worker_instance = PillarDBWorker(self.config)
-            db_worker_instance.start()
 
             node = Node.get_local_instance(self.config, pds)
             node.start()
-            print("started!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
             if self.args.identity_command == 'create_invitation':
                 node.create_invitation(self.args.peer_fingerprint_cid)
-                print("created????????????????????????????????????????")
                 pass
             elif self.args.identity_command == 'fingerprint_cid':
                 # TODO
@@ -63,7 +59,6 @@ class CLI:
         else:
             print("No subcommand provided")
             sys.exit(1)
-        pillar_db_worker.exit()
         key_manager.exit()
 
     def parse_args(self, args: list) -> Namespace:

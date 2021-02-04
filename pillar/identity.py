@@ -42,7 +42,7 @@ class LocalIdentity(PillarDBObject,
                     self.encryption_helper, key.fingerprint)
                 self.logger.debug('Channel manager started successfully.')
 
-    def run(self):
+    def pre_run(self):
         self.encryption_helper = EncryptionHelper(self.key_type)
         self.cid_messenger_instance = CIDMessenger(
             self.encryption_helper,
@@ -52,10 +52,8 @@ class LocalIdentity(PillarDBObject,
         self.start_channel_manager()
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
-
-        self.create_peer_channels()
-        self.channel_manager.start_channels()
-        super().run()
+        self.db_worker_instance = PillarDBWorker(self.config)
+        self.db_worker_instance.start()
 
     def shutdown_routine(self):
         self.db_worker_instance.exit()
@@ -142,6 +140,11 @@ class Node(LocalIdentity):
         multiprocessing.Process.__init__(self)
         super().__init__(*args)
 
+    def pre_run(self):
+        self.create_peer_channels()
+        self.channel_manager.start_channels()
+        super().pre_run()
+
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
 
@@ -171,7 +174,7 @@ class Primary(LocalIdentity):
             self.key_type)
         self.fingerprint = self.key.fingerprint
         self.fingerprint_cid = self.create_fingerprint_cid()
-        self.start_channel_manager()
+
         node = Node(self.config)
         node.fingerprint_cid = self.fingerprint_cid
         node.fingerprint = self.fingerprint
