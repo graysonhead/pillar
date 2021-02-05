@@ -394,7 +394,7 @@ class KeyManager(PillarWorkerThread):
                                                      subkey_fingerprint: str):
         print("IN KEY MANAGER")
         primary_fingerprint = \
-            self.key_manager.peer_subkey_map[subkey_fingerprint]
+            self.peer_subkey_map[subkey_fingerprint]
         return self.get_key_from_keyring(primary_fingerprint)
 
     @ key_manager_methods.register_method
@@ -407,7 +407,7 @@ class KeyManager(PillarWorkerThread):
 
     @ key_manager_methods.register_method
     def get_key_from_keyring(self, fingerprint: str):
-        with self.key_manager.keyring.key(fingerprint) as \
+        with self.keyring.key(fingerprint) as \
                 peer_primary_key:
             return peer_primary_key
 
