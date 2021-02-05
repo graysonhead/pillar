@@ -4,9 +4,9 @@ from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
     PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
-from .config import PillardConfig
 from .exceptions import WrongMessageType
 from .IPRPC.cid_messenger import CIDMessengerMixIn
+from .config import PillardConfig
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4

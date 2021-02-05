@@ -1,7 +1,7 @@
-from ..config import PillardConfig
 from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
     PillarKeyType
 from ..ipfs import IPFSMixIn
+from ..config import PillardConfig
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
 from .messages import IPRPCRegistry, IPRPCMessage
