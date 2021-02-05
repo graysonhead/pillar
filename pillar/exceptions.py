@@ -72,8 +72,8 @@ class WrongMessageType(Exception):
         super().__init__(f"Wrong message type: {type}.")
 
 
-class QueueCommandOutputTimeout(Exception):
+class DebugWDTTimeout(Exception):
     """
-    Raised when queue command doesn't receive output within CommandWDT
-    time window.
+    In debug mode, raised for timeouts in PillarThreadInterface.
+
     """

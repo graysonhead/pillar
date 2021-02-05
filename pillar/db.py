@@ -226,16 +226,6 @@ class PillarDBWorker(PillarWorkerThread):
             return records
 
     @pillar_db_register.register_method
-    def get_keys(self) -> list:
-        with self.get_scoped_session() as session:
-            keys = session.query(Key).all()
-            deserialized_keys = []
-            for key in keys:
-                deserialized_key, other = PGPKey.from_blob(key.key)
-                deserialized_keys.append(deserialized_key)
-            return deserialized_keys
-
-    @pillar_db_register.register_method
     def save_key(self, key: PGPKey):
         with self.get_scoped_session() as session:
             self.logger.info(f"Storing key {key.fingerprint} in database")

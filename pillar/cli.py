@@ -7,6 +7,7 @@ from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
 from pillar.keymanager import KeyManager
 from pillar.db import PillarDataStore
+from pillar.multiproc import PillarThreadInterface
 from pathlib import Path
 import sys
 
@@ -19,6 +20,8 @@ class CLI:
 
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
+            if self.args.verb == "DEBUG":
+                PillarThreadInterface.debug = True
         if not self.args.sub_command == '' \
                                         'bootstrap':
             self.config = self.get_config(self.args.config)
@@ -36,10 +39,10 @@ class CLI:
             )
             daemon.start()
         elif self.args.sub_command == 'identity':
-            pds = PillarDataStore(self.config)
-            key_manager = KeyManager(self.config, pds)
+            key_manager = KeyManager(self.config)
             key_manager.start()
 
+            pds = PillarDataStore(self.config)
             node = Node.get_local_instance(self.config, pds)
             node.start()
 
