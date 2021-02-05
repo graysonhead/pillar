@@ -4,7 +4,7 @@ from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
     PrimaryIdentity, PillarDBWorker
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
-from .config import Config
+from .config import PillardConfig
 from .exceptions import WrongMessageType, WontUpdateToStaleKey
 from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
@@ -23,7 +23,7 @@ class IdentityInterface(KeyManagerCommandQueueMixIn,
 class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
-                 config: Config, *args):
+                 config: PillardConfig, *args):
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
@@ -113,7 +113,7 @@ class LocalIdentity(PillarDBObject,
             self.channel_manager.add_peer(key)
 
     @classmethod
-    def get_local_instance(cls, config: Config, pds: PillarDataStore):
+    def get_local_instance(cls, config: PillardConfig, pds: PillarDataStore):
         return cls.load_all_from_db([config])[0]
 
 

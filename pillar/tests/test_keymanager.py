@@ -2,7 +2,7 @@ import pgpy
 from unittest import TestCase
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType,\
     KeyManagerStatus
-from ..config import Config
+from ..config import PillardConfig
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 import os
@@ -72,7 +72,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('pillar.identity.Node', new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = Config(config_directory="/this/shouldnt/exist")
+        self.config = PillardConfig(config_directory="/this/shouldnt/exist")
         pds = MagicMock()
         self.km = KeyManager(self.config, pds)
         self.km.start()
@@ -114,7 +114,7 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
             new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = Config()
+        self.config = PillardConfig()
         pds = MagicMock()
         self.km = KeyManager(self.config, pds)
         self.km.import_peer_key_from_cid('not_used')
@@ -155,7 +155,7 @@ class TestKeyManagerSubkeyGeneration(TestCase):
     @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
             new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = Config()
+        self.config = PillardConfig()
         pds = MagicMock()
         self.km = KeyManager(self.config, pds)
         self.km.start()
@@ -191,7 +191,7 @@ class TestKeyManagerDBOperations(TestCase):
     @patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @patch('asyncio.get_event_loop', new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = Config()
+        self.config = PillardConfig()
         pds = MagicMock()
         self.km = KeyManager(self.config, pds)
 

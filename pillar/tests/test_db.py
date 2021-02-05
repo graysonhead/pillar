@@ -1,5 +1,5 @@
 from ..db import PillarDBWorker, PillarDBObject
-from ..config import Config
+from ..config import PillardConfig
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.declarative import declarative_base
@@ -11,7 +11,7 @@ class TestPillarDB(TestCase):
 
     @patch.object(PillarDBWorker, '_get_engine')
     def test_engine_creation(self, mock_func):
-        config = Config()
+        config = PillardConfig()
         db = PillarDBWorker(config)
         db._get_engine('sqlite:///:memory:')
         mock_func.assert_called_with('sqlite:///:memory:')

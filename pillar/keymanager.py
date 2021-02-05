@@ -2,7 +2,7 @@ import pgpy
 from pgpy.constants import PubKeyAlgorithm, \
     KeyFlags, HashAlgorithm, SymmetricKeyAlgorithm, CompressionAlgorithm
 from pgpy.types import Fingerprint
-from .config import Config
+from .config import PillardConfig
 import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
@@ -62,7 +62,8 @@ class KeyManager(PillarWorkerThread):
     shutdown_callback = multiprocessing.Event()
     methods_register = key_manager_methods
 
-    def __init__(self, config: Config, pds: PillarDataStore, db_import=True):
+    def __init__(self, config: PillardConfig, pds: PillarDataStore,
+                 db_import=True):
         self.logger = logging.getLogger('<KeyManager>')
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()

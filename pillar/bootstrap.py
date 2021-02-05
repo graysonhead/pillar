@@ -1,5 +1,5 @@
 from argparse import Namespace
-from pillar.config import Config
+from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
 from pillar.identity import PrimaryIdentityMixIn, Primary
@@ -157,7 +157,7 @@ class Bootstrapper:
                 raise FileExistsError(
                     f"The config file {str(config_path)}, already exists, run "
                     f"again with --purge to delete it.")
-        config_obj = Config()
+        config_obj = PillardConfig()
         print("The following questions will generate the config file for "
               "pillar, you can press enter to accept the defaults (shown "
               "in brackets.)")

@@ -1,7 +1,7 @@
 from unittest import TestCase
 import os
 import yaml
-from ..config import Config, ConfigOption, UNSET, OptionNotValid
+from ..config import PillardConfig, ConfigOption, UNSET, OptionNotValid
 
 
 class TestConfigOptions(TestCase):
@@ -59,15 +59,15 @@ test_options = [ConfigOption('test_option',
 class TestConfig(TestCase):
 
     def setUp(self) -> None:
-        self.original_options = Config.options
-        Config.options = [ConfigOption('test_option',
-                                       [str],
-                                       default_value='default_value',
-                                       description='This is an option')]
-        self.config = Config(test_option='a_value')
+        self.original_options = PillardConfig.options
+        PillardConfig.options = [ConfigOption('test_option',
+                                              [str],
+                                              default_value='default_value',
+                                              description='This is an option')]
+        self.config = PillardConfig(test_option='a_value')
 
     def tearDown(self) -> None:
-        Config.options = self.original_options
+        PillardConfig.options = self.original_options
 
     def test_set_invalid_option(self):
         with self.assertRaises(OptionNotValid):
@@ -86,15 +86,15 @@ class TestConfig(TestCase):
 class TestEmptyConfig(TestCase):
 
     def setUp(self) -> None:
-        self.original_options = Config.options
-        Config.options = [ConfigOption('test_option',
-                                       [str],
-                                       default_value='default_value',
-                                       description='This is an option')]
-        self.config = Config()
+        self.original_options = PillardConfig.options
+        PillardConfig.options = [ConfigOption('test_option',
+                                              [str],
+                                              default_value='default_value',
+                                              description='This is an option')]
+        self.config = PillardConfig()
 
     def tearDown(self) -> None:
-        Config.options = self.original_options
+        PillardConfig.options = self.original_options
 
     def test_get_empty_option_returns_default_value(self):
         result = self.config.get_value('test_option')
@@ -104,17 +104,18 @@ class TestEmptyConfig(TestCase):
 class TestConfigLoadFromFile(TestCase):
 
     def setUp(self) -> None:
-        self.original_options = Config.options
-        Config.options = [ConfigOption('test_option',
-                                       [str],
-                                       default_value='default_value',
-                                       description='This is an option')]
-        self.config = Config.load_from_yaml(os.path.join(os.path.dirname(
-            os.path.abspath(__file__)
-        ), 'data/config.yaml'))
+        self.original_options = PillardConfig.options
+        PillardConfig.options = [ConfigOption('test_option',
+                                              [str],
+                                              default_value='default_value',
+                                              description='This is an option')]
+        self.config = PillardConfig.load_from_yaml(os.path.join(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            ), 'data/config.yaml'))
 
     def tearDown(self) -> None:
-        Config.options = self.original_options
+        PillardConfig.options = self.original_options
 
     def test_value_set_from_yaml(self):
         result = self.config.get_value('test_option')
@@ -124,16 +125,16 @@ class TestConfigLoadFromFile(TestCase):
 class TestConfigWriteDefaultOptions(TestCase):
 
     def setUp(self) -> None:
-        self.original_options = Config.options
-        Config.options = [ConfigOption('test_option',
-                                       [str],
-                                       default_value='default_value',
-                                       description='This is an option')]
-        self.config = Config(test_option='a_value')
+        self.original_options = PillardConfig.options
+        PillardConfig.options = [ConfigOption('test_option',
+                                              [str],
+                                              default_value='default_value',
+                                              description='This is an option')]
+        self.config = PillardConfig(test_option='a_value')
         self.file_path = os.path.join(os.getcwd(), 'testconfig.yaml')
 
     def tearDown(self) -> None:
-        Config.options = self.original_options
+        PillardConfig.options = self.original_options
         os.remove(self.file_path)
 
     def test_write_values_to_file(self):

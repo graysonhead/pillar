@@ -13,7 +13,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.properties import ColumnProperty
-from .config import Config
+from .config import PillardConfig
 from pgpy import PGPKeyring, PGPKey
 from contextlib import contextmanager
 from multiprocessing import Queue, Event
@@ -69,7 +69,7 @@ class PillarDB:
     This class generates new sessions with the get_session() method
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: PillardConfig):
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
@@ -87,7 +87,7 @@ class PillarDB:
 
 class PillarDataStore:
 
-    def __init__(self, config: Config):
+    def __init__(self, config: PillardConfig):
         self.pdb = PillarDBWorker(config)
         self.logger = logging.getLogger(self.__repr__())
 
@@ -185,7 +185,7 @@ class PillarDBWorker(PillarWorkerThread):
     shutdown_callback = Event()
     methods_register = pillar_db_register
 
-    def __init__(self, config: Config):
+    def __init__(self, config: PillardConfig):
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)

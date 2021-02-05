@@ -1,6 +1,6 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
-from pillar.config import Config
+from pillar.config import PillardConfig
 from pillar.keymanager import KeyManager
 
 
@@ -12,7 +12,7 @@ class Namespace:
 class TestBootstrapKeys(TestCase):
 
     def setUp(self) -> None:
-        self.config = Config(
+        self.config = PillardConfig(
             config_directory='pillar/tests/data/bootstrap_test/'
                              'config_dir_empty'
         )

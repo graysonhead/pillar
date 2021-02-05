@@ -1,5 +1,5 @@
 import argparse
-from pillar.config import Config
+from pillar.config import PillardConfig
 from argparse import Namespace
 import logging
 from pillar.identity import Node
@@ -104,13 +104,13 @@ class CLI:
                             choices=["INFO", "DEBUG", "WARNING"])
         return parser.parse_args(args)
 
-    def get_config(self, config_path: str) -> Config:
+    def get_config(self, config_path: str) -> PillardConfig:
         path = Path(config_path).expanduser()
         self.logger.info(f"Loading config file from {config_path}")
         try:
-            config = Config.load_from_yaml(str(path))
+            config = PillardConfig.load_from_yaml(str(path))
         except FileNotFoundError:
-            config = Config()
+            config = PillardConfig()
             self.logger.info(f"Didn't find config file, created one at"
                              f" {config_path}")
 

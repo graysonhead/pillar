@@ -6,7 +6,7 @@ https://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python/
 Modified to add graceful shutdown for child processes.
 """
 from pillar.keymanager import KeyManager
-from pillar.config import Config
+from pillar.config import PillardConfig
 from pillar.ipfs import IPFSWorker
 from pillar.identity import Node
 from pillar.db import PillarDataStore
@@ -21,7 +21,7 @@ import os
 class PillarDaemon:
 
     def __init__(self,
-                 config: Config,
+                 config: PillardConfig,
                  pidfile: str,
                  stdout,
                  stderr):
@@ -134,7 +134,7 @@ class PillarDaemon:
         for worker in self.ipfs_workers:
             worker.exit()
 
-    def get_ipfs_workers(self, config: Config):
+    def get_ipfs_workers(self, config: PillardConfig):
         workers = []
         for i in range(config.get_value('ipfs_workers')):
             workers.append(IPFSWorker(str(i)))

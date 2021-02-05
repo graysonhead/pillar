@@ -1,4 +1,4 @@
-from ..config import Config
+from ..config import PillardConfig
 from ..keymanager import EncryptionHelper
 from ..ipfs import IPFSMixIn, IPFSWorker
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
@@ -24,7 +24,7 @@ class CIDMessenger(PillarWorkerThread):
 
     def __init__(self,
                  encryption_helper: EncryptionHelper,
-                 config: Config):
+                 config: PillardConfig):
         self.logger = logging.getLogger('<CIDMessenger>')
         self.logger.info("Starting CIDMessenger")
         self.encryption_helper = encryption_helper
