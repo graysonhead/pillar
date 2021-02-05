@@ -73,8 +73,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.identity.Node', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig(config_directory="/this/shouldnt/exist")
-        pds = MagicMock()
-        self.km = KeyManager(self.config, pds)
+        self.km = KeyManager(self.config)
         self.km.start()
 
     def test_instantiate_keymanager_class(self):
@@ -115,8 +114,7 @@ class TestNonEmptyKeyManager(TestCase):
             new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
-        pds = MagicMock()
-        self.km = KeyManager(self.config, pds)
+        self.km = KeyManager(self.config)
         self.km.import_peer_key_from_cid('not_used')
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
@@ -156,8 +154,7 @@ class TestKeyManagerSubkeyGeneration(TestCase):
             new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
-        pds = MagicMock()
-        self.km = KeyManager(self.config, pds)
+        self.km = KeyManager(self.config)
         self.km.start()
         self.config.set_value('config_directory', '.unittestconfigdir')
         dir = self.config.get_value('config_directory')
@@ -192,8 +189,7 @@ class TestKeyManagerDBOperations(TestCase):
     @patch('asyncio.get_event_loop', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
-        pds = MagicMock()
-        self.km = KeyManager(self.config, pds)
+        self.km = KeyManager(self.config)
 
     @patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
            new_callable=mock_pubkey0)
@@ -202,8 +198,6 @@ class TestKeyManagerDBOperations(TestCase):
     def test_import_peer_key_saves_to_database(self, *args):
         self.km.import_peer_key_from_cid('not_used')
         self.km.get_key_message_by_cid.assert_called()
-        self.km.pds.save_key.assert_called()
 
     def test_import_peers_keys_from_database(self, *args):
         self.km.import_peer_keys_from_database()
-        self.km.pds.get_keys.assert_called()

@@ -7,7 +7,7 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDataStore, PillarDBWorker
+from .db import PillarDataStore, PillarDBWorker, PillarDBObject, Key
 from .interfaces import PillarInterfaces
 from .multiproc import PillarWorkerThread, PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
@@ -51,6 +51,32 @@ class KeyOptions:
 key_manager_methods = PillarThreadMethodsRegister()
 
 
+class PillarPGPKey(PillarDBObject):
+    model = Key
+
+    def __init__(self):
+        self.fingerprint = None
+        self.key = None
+        self.invitation_id = None
+        self.invitation = None
+
+    def load_pgpy_key(self, key: pgpy.PGPKey):
+        self.fingerprint = key.fingerprint
+        self.key = bytes(key)
+
+    @classmethod
+    def get_keys(cls):
+        print("we're here...............")
+        instances = cls.load_all_from_db()
+        print(instances)
+        ret = []
+
+        for instance in instances:
+            key, o = pgpy.PGPKey.from_blob(instance.key)
+            ret.append(key)
+        return ret
+
+
 class KeyManager(PillarWorkerThread):
     """
     Keymanager creates and manages the keys needed to operate a
@@ -62,13 +88,11 @@ class KeyManager(PillarWorkerThread):
     shutdown_callback = multiprocessing.Event()
     methods_register = key_manager_methods
 
-    def __init__(self, config: PillardConfig, pds: PillarDataStore,
-                 db_import=True):
+    def __init__(self, config: PillardConfig):
         self.logger = logging.getLogger('<KeyManager>')
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()
         self.config = config
-        self.pds = pds
         self.user_primary_key_cid = None
         self.registration_primary_key_cid = None
         self.registration_primary_key = self.load_keytype(
@@ -79,8 +103,6 @@ class KeyManager(PillarWorkerThread):
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
         self.node_uuid = None
-        if db_import:
-            self.import_peer_keys_from_database()
 
         self.queue_thread_class = self.__class__
         self.interfaces = PillarInterfaces()
@@ -89,13 +111,13 @@ class KeyManager(PillarWorkerThread):
     def pre_run(self):
         self.db_worker_instance = PillarDBWorker(self.config)
         self.db_worker_instance.start()
+        self.import_peer_keys_from_database()
 
     def shutdown_routine(self):
         self.db_worker_instance.exit()
 
     @ key_manager_methods.register_method
     def import_or_update_peer_key(self, cid):
-        print("made it here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         try:
             return self.import_peer_key_from_cid(cid)
         except CannotImportSamePrimaryFingerprint:
@@ -112,9 +134,15 @@ class KeyManager(PillarWorkerThread):
         return self.import_peer_key(peer_key)
 
     def import_peer_keys_from_database(self):
-        peer_keys = self.pds.get_keys()
+        try:
+            peer_keys = PillarPGPKey.get_keys()
+        except Exception as e:
+            print(e.__name__)
+            print(str(e))
+
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
+            print(key)
             self.import_peer_key(key, persist=False)
 
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
@@ -122,13 +150,17 @@ class KeyManager(PillarWorkerThread):
         Import a new key into the keyring
         """
         if self.key_already_in_keyring(peer_key.fingerprint):
+            pass
             raise CannotImportSamePrimaryFingerprint
         else:
             self.logger.info(
                 f"Importing new public key: {peer_key.fingerprint}")
             self.keyring.load(peer_key)
             if persist:
-                self.pds.save_key(peer_key)
+                print("Hit@@@@@@@@@@@@@@@@@@@@@@@@@")
+                key = PillarPGPKey()
+                key.load_pgpy_key(peer_key)
+                key.pds_save()
             for k in peer_key.subkeys:
                 self.peer_subkey_map.update(
                     {k: peer_key.fingerprint})
@@ -147,6 +179,7 @@ class KeyManager(PillarWorkerThread):
         self.logger.info(
             f"Updating peer key: {new_key.fingerprint}")
         if not self.this_key_is_newer(new_key):
+            return
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
             raise KeyNotVerified
@@ -356,6 +389,7 @@ class KeyManager(PillarWorkerThread):
     @ key_manager_methods.register_method
     def get_peer_primary_key_from_subkey_fingerprint(self,
                                                      subkey_fingerprint: str):
+        print("IN KEY MANAGER")
         primary_fingerprint = \
             self.key_manager.peer_subkey_map[subkey_fingerprint]
         return self.get_key_from_keyring(primary_fingerprint)
@@ -441,8 +475,10 @@ class EncryptionHelper:
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
 
+        print("in encryption helper")
         peer_key = self.interface.key_manager.\
             get_peer_primary_key_from_subkey_fingerprint(remote_keyid)
+        print("eh?")
 
         peer_subkey = None
         for _, key in peer_key._children.items():
