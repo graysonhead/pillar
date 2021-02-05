@@ -1,13 +1,14 @@
-import pgpy
-from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions, PillarKeyType
-from ..config import PillardConfig
+import shutil
+from pgpy.constants import PubKeyAlgorithm
+from unittest.mock import patch, MagicMock
+import os
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
-import os
-from unittest.mock import patch, MagicMock
-from pgpy.constants import PubKeyAlgorithm
-import shutil
+from ..config import PillardConfig
+from ..keymanager import KeyManager, KeyOptions, PillarKeyType
+
+import pgpy
+from unittest import TestCase
 
 
 def remove_directories(dirs: list):
@@ -145,6 +146,7 @@ class TestNonEmptyKeyManager(TestCase):
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config)
+
         self.km.import_peer_key_from_cid('not_used')
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
