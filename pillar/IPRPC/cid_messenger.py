@@ -65,11 +65,14 @@ class CIDMessenger(PillarWorkerThread):
                                                message: IPRPCMessage,
                                                peer_fingerprint: str):
         serialized_message = message.serialize_to_json()
+
+        print(self.encryption_helper)
         encrypted_message = self.encryption_helper.\
             sign_and_encrypt_string_to_peer_fingerprint(
                 serialized_message,
                 peer_fingerprint)
 
+        print("IN CID MESSENGER-----------------------------------")
         data = self.interface.ipfs.add_str(str(encrypted_message))
         self.logger.info(f"Created new encrypted message: {data['Hash']}")
         return data['Hash']

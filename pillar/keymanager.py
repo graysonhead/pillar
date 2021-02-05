@@ -7,8 +7,8 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDBWorker, PillarDBObject, Key, KeyManagerData,\
-    PillarDataStore
+from .db import PillarDataStore, PillarDBWorker, PillarDBObject, Key
+
 from .interfaces import PillarInterfaces
 from .multiproc import PillarWorkerThread, \
     PillarThreadMethodsRegister,\
@@ -150,6 +150,7 @@ class KeyManager(PillarDBObject,
 
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
+            print(key)
             self.import_peer_key(key, persist=False)
 
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
@@ -185,6 +186,7 @@ class KeyManager(PillarDBObject,
             raise KeyNotInKeyring
         self.logger.info(
             f"Updating peer key: {new_key.fingerprint}")
+
         if not self.this_key_is_newer_or_equal(new_key):
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
@@ -405,7 +407,7 @@ class KeyManager(PillarDBObject,
                                                      subkey_fingerprint: str):
         primary_fingerprint = self.peer_subkey_map[subkey_fingerprint]
         key = self.get_key_from_keyring(primary_fingerprint)
-        self.logger.debug(f"Loaded peer key: {key}")
+        self.logger.debug(f"Loaded peer key: {key.fingerprint}")
         return key
 
     @ key_manager_methods.register_method
@@ -464,8 +466,10 @@ class EncryptionHelper:
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
 
+        print("in encryption helper")
         peer_key = self.interface.key_manager.\
             get_peer_primary_key_from_subkey_fingerprint(remote_keyid)
+        print("eh?")
 
         peer_subkey = None
         for _, key in peer_key._children.items():

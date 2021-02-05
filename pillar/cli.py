@@ -3,8 +3,10 @@ from argparse import Namespace
 import logging
 from pillar.identity import NodeIdentityMixIn
 from pillar.bootstrap import Bootstrapper
-from pillar.multiproc import PillarThreadInterface, MixedClass
-from pillar.simple_daemon import Daemon
+from pillar.daemon import PillarDaemon
+from pillar.keymanager import KeyManager
+from pillar.db import PillarDataStore
+from pillar.multiproc import PillarThreadInterface
 from pathlib import Path
 import sys
 import argparse
@@ -40,8 +42,13 @@ class CLI:
             daemon.start()
             daemon.start_housekeeping()
         elif self.args.sub_command == 'identity':
-            daemon = Daemon(self.config)
-            daemon.start()
+
+            key_manager = KeyManager(self.config)
+            key_manager.start()
+
+            pds = PillarDataStore(self.config)
+            node = Node.get_local_instance(self.config, pds)
+            node.start()
 
             if self.args.identity_command == 'create_invitation':
                 print(self.interface.node_identity.create_invitation(

@@ -14,7 +14,6 @@ class DebugWDT(Process):
     def __init__(self, timeout):
         self.timeout = timeout
         self.alarm = Event()
-        self.logged = False
         super().__init__()
 
     def run(self):
@@ -103,17 +102,11 @@ class PillarWorkerThread(Process):
         if not hasattr(self, "logger"):
             self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
 
-    def each_loop(self):
-        if self.__class__.__name__ == "KeyManager":
-            pass
-        # self.logger.info(".")
-
     async def run_queue_commands(self):
         """
         Pulls commands from the queue, and runs matching methods on the class
         """
         while True:
-            self.each_loop()
             try:
                 command = self.command_queue.get_nowait()
                 self.logger.debug(f"receved command {command.command_name}")
@@ -216,14 +209,7 @@ class PillarThreadInterface:
         found = False
         while not found:
             if self.debug and debug_wdt.alarm.is_set():
-                try:
-                    raise DebugWDTTimeout
-                except Exception as e:
-                    if not debug_wdt.logged:
-                        debug_wdt.logged = True
-                        self.logger.warn(
-                            ''.join(traceback.format_exception(
-                                None, e, e.__traceback__)))
+                raise DebugWDTTimeout
             try:
                 output = output_queue.get_nowait()
                 for id, output in output.items():

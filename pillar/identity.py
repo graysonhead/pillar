@@ -7,6 +7,9 @@ from .keymanager import PillarKeyType, EncryptionHelper,\
 from .exceptions import WrongMessageType
 from .IPRPC.cid_messenger import CIDMessengerMixIn
 from .config import PillardConfig
+
+from .exceptions import WrongMessageType, WontUpdateToStaleKey
+from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
@@ -23,7 +26,7 @@ class IdentityInterface(KeyManagerCommandQueueMixIn,
 class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
-                 config: PillardConfig, start_channel=False):
+                 config: PillardConfig):
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
@@ -46,6 +49,14 @@ class LocalIdentity(PillarDBObject,
 
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
+        self.db_worker_instance = PillarDBWorker(self.config)
+        self.db_worker_instance.start()
+        self.key_manager_instance = KeyManager(self.config)
+
+    def shutdown_routine(self):
+        self.key_manager_instance.exit()
+        self.db_worker_instance.exit()
+        self.cid_messenger_instance.exit()
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
