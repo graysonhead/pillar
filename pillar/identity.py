@@ -36,14 +36,14 @@ class LocalIdentity(PillarDBObject,
     def start_channel_manager(self):
         if self.channel_manager is None:
             self.logger.info('Starting channel manager.')
-            key = self.local_key = self.id_interface.key_manager.\
-                get_private_key_for_key_type(self.key_type)
+            key = self.encryption_helper.local_key
             if key is not None:
                 self.channel_manager = ChannelManager(
                     self.encryption_helper, key.fingerprint)
                 self.logger.debug('Channel manager started successfully.')
 
     def pre_run(self):
+        print("node prerun")
         self.encryption_helper = EncryptionHelper(self.key_type)
         self.cid_messenger_instance = CIDMessenger(
             self.encryption_helper,
@@ -86,6 +86,8 @@ class LocalIdentity(PillarDBObject,
         )
         self.logger.info(
             f'Creating invitation for peer {peer_fingerprint_cid}')
+        self.id_interface.key_manager.printer(
+            "What about from here? Does this work?")
         return self.id_interface.cid_messenger.\
             add_encrypted_message_to_ipfs_for_peer(invitation, fingerprint)
 
