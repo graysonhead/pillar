@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 import inspect
+import traceback
 from uuid import uuid4
 
 
@@ -12,6 +13,7 @@ class DebugWDT(Process):
     def __init__(self, timeout):
         self.timeout = timeout
         self.alarm = Event()
+        self.logged = False
         super().__init__()
 
     def run(self):
@@ -37,6 +39,7 @@ class QueueCommand:
         self.args = args
         self.kwargs = kwargs
         self.id = uuid4()
+        self.logger.debug(f"running command {command_name} id {self.id}")
 
 
 class PillarThreadMethodsRegister:
@@ -102,7 +105,7 @@ class PillarWorkerThread(Process):
     def each_loop(self):
         if self.__class__.__name__ == "KeyManager":
             pass
-            #            self.logger.info(".")
+        # self.logger.info(".")
 
     async def run_queue_commands(self):
         """
@@ -112,6 +115,7 @@ class PillarWorkerThread(Process):
             self.each_loop()
             try:
                 command = self.command_queue.get_nowait()
+                self.logger.debug(f"receved command {command.command_name}")
                 args = command.args
                 kwargs = command.kwargs
                 method = self.methods_register. \
@@ -129,11 +133,14 @@ class PillarWorkerThread(Process):
                             *args,
                             **kwargs
                         )
+                    self.logger.debug(f"Enqueuing output: {output}")
                     self.output_queue.put(
                         {command.id: output}
                     )
                 except Exception as e:
-                    self.logger.warn(str(e))
+                    self.logger.warn(
+                        ''.join(traceback.format_exception(
+                            None, e, e.__traceback__)))
                     self.output_queue.put(
                         {command.id: e}
                     )
@@ -184,6 +191,7 @@ class PillarThreadInterface:
         self.queue_thread_class = queue_thread_class
         self.method_register = queue_thread_class.methods_register
         self.setup_command_methods()
+        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
 
     def setup_command_methods(self):
         for command in self.method_register.get_methods():
@@ -202,11 +210,22 @@ class PillarThreadInterface:
         found = False
         while not found:
             if self.debug and debug_wdt.alarm.is_set():
-                raise DebugWDTTimeout
+                try:
+                    raise DebugWDTTimeout
+                except Exception as e:
+                    if not debug_wdt.logged:
+                        debug_wdt.logged = True
+                        self.logger.warn(
+                            ''.join(traceback.format_exception(
+                                None, e, e.__traceback__)))
             try:
                 output = output_queue.get_nowait()
                 for id, output in output.items():
+                    if type(output) is Exception:
+                        raise output
                     if id == uuid:
+                        self.logger.debug(
+                            f"got command output for command id {uuid}")
                         ret = output
                         found = True
                     else:
