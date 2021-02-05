@@ -9,7 +9,8 @@ from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
 from .db import PillarDataStore, PillarDBWorker, PillarDBObject, Key
 from .interfaces import PillarInterfaces
-from .multiproc import PillarWorkerThread, PillarThreadMethodsRegister,\
+from .multiproc import PillarWorkerThread, PillarThreadInterface, \
+    PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
 from enum import Enum
 from uuid import uuid4
@@ -157,7 +158,6 @@ class KeyManager(PillarWorkerThread):
                 f"Importing new public key: {peer_key.fingerprint}")
             self.keyring.load(peer_key)
             if persist:
-                print("Hit@@@@@@@@@@@@@@@@@@@@@@@@@")
                 key = PillarPGPKey()
                 key.load_pgpy_key(peer_key)
                 key.pds_save()
@@ -174,12 +174,13 @@ class KeyManager(PillarWorkerThread):
         try:
             new_key = self.verify_and_extract_key_from_key_message(
                 new_key_message)
+            self.keyring.load(new_key)
+            return new_key.fingerprint
         except KeyError:
             raise KeyNotInKeyring
         self.logger.info(
             f"Updating peer key: {new_key.fingerprint}")
         if not self.this_key_is_newer(new_key):
-            return
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
             raise KeyNotVerified
@@ -384,6 +385,8 @@ class KeyManager(PillarWorkerThread):
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
                 keys.append(key)
+        print("in key manager get_keys")
+        print(keys)
         return keys
 
     @ key_manager_methods.register_method
