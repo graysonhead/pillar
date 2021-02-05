@@ -1,5 +1,5 @@
 from ..config import PillardConfig
-from ..keymanager import EncryptionHelper
+from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn
 from ..ipfs import IPFSMixIn, IPFSWorker
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
@@ -12,7 +12,8 @@ import multiprocessing as mp
 cid_messenger_register = PillarThreadMethodsRegister()
 
 
-class CIDMessengerInterface(IPFSMixIn, metaclass=MixedClass):
+class CIDMessengerInterface(KeyManagerCommandQueueMixIn,
+                            IPFSMixIn, metaclass=MixedClass):
     pass
 
 
@@ -68,7 +69,7 @@ class CIDMessenger(PillarWorkerThread):
                                                peer_fingerprint: str):
         serialized_message = message.serialize_to_json()
 
-        print(self.encryption_helper)
+        self.interface.key_manager.printer("can I send from here?")
         encrypted_message = self.encryption_helper.\
             sign_and_encrypt_string_to_peer_fingerprint(
                 serialized_message,

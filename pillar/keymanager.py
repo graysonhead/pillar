@@ -419,6 +419,10 @@ class KeyManager(PillarWorkerThread):
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
 
+    @ key_manager_methods.register_method
+    def printer(self, msg: str):
+        print(msg)
+
 
 class QueueCommand:
     def __init__(self, command_name: str, *args, **kwargs):
@@ -466,8 +470,8 @@ class EncryptionHelper:
         self.logger = logging.getLogger(
             f'<{self.__class__.__name__}>')
         self.keytype = keytype
+
         self.interface = EncryptionHelperInterface()
-        super().__init__()
 
         self.local_key = self.interface.key_manager.\
             get_private_key_for_key_type(self.keytype)
@@ -479,6 +483,7 @@ class EncryptionHelper:
             Fingerprint, remote_fingerprint).keyid
 
         print("in encryption helper")
+        self.interface.key_manager.printer("what is it???")
         peer_key = self.interface.key_manager.\
             get_peer_primary_key_from_subkey_fingerprint(remote_keyid)
         print("eh?")
