@@ -14,6 +14,7 @@ class DebugWDT(Process):
     def __init__(self, timeout):
         self.timeout = timeout
         self.alarm = Event()
+        self.logged = False
         super().__init__()
 
     def run(self):
@@ -168,7 +169,6 @@ class PillarWorkerThread(Process):
         This runs the worker loop, and is called in a subprocess by the
         self.start() method
         """
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.pre_run()
         self.loop = asyncio.get_event_loop()
         asyncio.ensure_future(self.run_queue_commands())
@@ -209,12 +209,18 @@ class PillarThreadInterface:
         found = False
         while not found:
             if self.debug and debug_wdt.alarm.is_set():
-                raise DebugWDTTimeout
+                try:
+                    raise DebugWDTTimeout
+                except Exception as e:
+                    if not debug_wdt.logged:
+                        debug_wdt.logged = True
+                        self.logger.warn(
+                            ''.join(traceback.format_exception(
+                                None, e, e.__traceback__)))
             try:
                 output = output_queue.get_nowait()
                 for id, output in output.items():
-                    if issubclass(type(output), Exception):
-                        print(output)
+                    if type(output) is Exception:
                         raise output
                     if id == uuid:
                         self.logger.debug(

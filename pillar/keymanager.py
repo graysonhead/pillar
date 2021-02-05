@@ -10,7 +10,7 @@ from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
 from .db import PillarDataStore, PillarDBWorker, PillarDBObject, Key
 
 from .interfaces import PillarInterfaces
-from .multiproc import PillarWorkerThread, \
+from .multiproc import PillarWorkerThread, PillarThreadInterface, \
     PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
 from enum import Enum
@@ -182,6 +182,8 @@ class KeyManager(PillarDBObject,
         try:
             new_key = self.verify_and_extract_key_from_key_message(
                 new_key_message)
+            self.keyring.load(new_key)
+            return new_key.fingerprint
         except KeyError:
             raise KeyNotInKeyring
         self.logger.info(
@@ -400,6 +402,8 @@ class KeyManager(PillarDBObject,
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
                 keys.append(key)
+        print("in key manager get_keys")
+        print(keys)
         return keys
 
     @ key_manager_methods.register_method
