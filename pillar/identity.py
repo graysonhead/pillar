@@ -24,7 +24,7 @@ class IdentityInterface(KeyManagerCommandQueueMixIn,
 class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
-                 config: PillardConfig):
+                 config: PillardConfig, start_channel=False):
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
@@ -54,10 +54,8 @@ class LocalIdentity(PillarDBObject,
             get_user_primary_key_cid()
         self.db_worker_instance = PillarDBWorker(self.config)
         self.db_worker_instance.start()
-        self.key_manager_instance = KeyManager(self.config)
 
     def shutdown_routine(self):
-        self.key_manager_instance.exit()
         self.db_worker_instance.exit()
         self.cid_messenger_instance.exit()
 
@@ -118,38 +116,6 @@ class LocalIdentity(PillarDBObject,
         return cls.load_all_from_db([config])[0]
 
 
-node_identity_methods = PillarThreadMethodsRegister()
-
-
-class Node(LocalIdentity):
-    model = NodeIdentity
-    methods_register = node_identity_methods
-    command_queue = multiprocessing.Queue()
-    output_queue = multiprocessing.Queue()
-    shutdown_callback = multiprocessing.Event()
-
-    def __init__(self, *args,
-                 id: int = None,
-                 fingerprint: str = None,
-                 fingerprint_cid: str = None,
-                 **kwargs):
-        self.id = id
-        self.key_type = PillarKeyType.NODE_SUBKEY
-        self.fingerprint = fingerprint
-        self.fingerprint_cid = fingerprint_cid
-        multiprocessing.Process.__init__(self)
-        super().__init__(*args)
-
-    def pre_run(self):
-        super().pre_run()
-        self.start_channel_manager()
-        self.create_peer_channels()
-        self.channel_manager.start_channels()
-
-    def __repr__(self):
-        return f"<Node: {self.fingerprint}>"
-
-
 primary_identity_methods = PillarThreadMethodsRegister()
 
 
@@ -189,3 +155,42 @@ class Primary(LocalIdentity):
 class PrimaryIdentityMixIn(PillarThreadMixIn):
     queue_thread_class = Primary
     interface_name = "primary_identity"
+
+
+class IdentityWithChannel(LocalIdentity):
+    def __init__(self, *args, start_channels=False):
+        self.start_channels = start_channels
+        super().__init__(*args)
+
+    def pre_run(self):
+        super().pre_run()
+        if self.start_channels:
+            self.start_channel_manager()
+            self.create_peer_channels()
+            self.channel_manager.start_channels()
+
+
+node_identity_methods = PillarThreadMethodsRegister()
+
+
+class Node(IdentityWithChannel):
+    model = NodeIdentity
+    methods_register = node_identity_methods
+    command_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    shutdown_callback = multiprocessing.Event()
+
+    def __init__(self, *args,
+                 id: int = None,
+                 fingerprint: str = None,
+                 fingerprint_cid: str = None,
+                 **kwargs):
+        self.id = id
+        self.key_type = PillarKeyType.NODE_SUBKEY
+        self.fingerprint = fingerprint
+        self.fingerprint_cid = fingerprint_cid
+        multiprocessing.Process.__init__(self)
+        super().__init__(*args)
+
+    def __repr__(self):
+        return f"<Node: {self.fingerprint}>"
