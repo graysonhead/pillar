@@ -5,6 +5,7 @@ from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import PillardConfig
+
 from .exceptions import WrongMessageType, WontUpdateToStaleKey
 from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
@@ -23,7 +24,7 @@ class IdentityInterface(KeyManagerCommandQueueMixIn,
 class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
-                 config: PillardConfig, *args):
+                 config: PillardConfig):
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
@@ -53,8 +54,10 @@ class LocalIdentity(PillarDBObject,
             get_user_primary_key_cid()
         self.db_worker_instance = PillarDBWorker(self.config)
         self.db_worker_instance.start()
+        self.key_manager_instance = KeyManager(self.config)
 
     def shutdown_routine(self):
+        self.key_manager_instance.exit()
         self.db_worker_instance.exit()
         self.cid_messenger_instance.exit()
 
@@ -71,14 +74,12 @@ class LocalIdentity(PillarDBObject,
         self.channel_manager.add_peer(key, invitation)
 
     def create_invitation(self, peer_fingerprint_cid):
-        print("Made it here!!")
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(
             peer_fingerprint_cid)
-        try:
-            self.id_interface.key_manager.import_or_update_peer_key(
-                pubkey_cid)
-        except WontUpdateToStaleKey:
-            pass
+
+        self.id_interface.key_manager.import_or_update_peer_key(
+            pubkey_cid)
+
         invitation = InvitationMessage(
             public_key_cid=self.public_key_cid,
             preshared_key=str(uuid4()),

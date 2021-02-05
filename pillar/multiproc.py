@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from pillar.exceptions import DebugWDTTimeout
+from multiprocessing import Process, Event
 from queue import Empty
 import asyncio
 import logging
@@ -6,6 +7,22 @@ import time
 import inspect
 import signal
 from uuid import uuid4
+
+
+class DebugWDT(Process):
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.alarm = Event()
+        super().__init__()
+
+    def run(self):
+        import time
+        i = self.timeout
+        while i > 0:
+            i -= 1
+            time.sleep(1)
+
+        self.alarm.set()
 
 
 class QueueCommand:
@@ -80,33 +97,48 @@ class PillarWorkerThread(Process):
     def __init__(self):
         self.loop = None
         super().__init__()
+        if not hasattr(self, "logger"):
+            self.logger = logging.getLogger("<{self.__class__.__name__}>")
+
+    def each_loop(self):
+        if self.__class__.__name__ == "KeyManager":
+            pass
+            #            self.logger.info(".")
 
     async def run_queue_commands(self):
         """
         Pulls commands from the queue, and runs matching methods on the class
         """
         while True:
+            self.each_loop()
             try:
                 command = self.command_queue.get_nowait()
                 args = command.args
                 kwargs = command.kwargs
                 method = self.methods_register. \
                     methods[command.command_name]
-                if inspect.iscoroutinefunction(method):
-                    output = await method(
-                        self,
-                        *args,
-                        **kwargs
+                try:
+                    if inspect.iscoroutinefunction(method):
+                        output = await method(
+                            self,
+                            *args,
+                            **kwargs
+                        )
+                    else:
+                        output = method(
+                            self,
+                            *args,
+                            **kwargs
+                        )
+                    self.output_queue.put(
+                        {command.id: output}
                     )
-                else:
-                    output = method(
-                        self,
-                        *args,
-                        **kwargs
+                except Exception as e:
+                    self.logger.warn(str(e))
+                    self.output_queue.put(
+                        {command.id: e}
                     )
-                self.output_queue.put(
-                    {command.id: output}
-                )
+
             except Empty:
                 await asyncio.sleep(0.01)
             if self.shutdown_callback.is_set():
@@ -146,6 +178,7 @@ class PillarThreadInterface:
     class will be added to this class and are callable, but will be run
     transparently on the worker as opposed to the local class.
     """
+    debug = False
 
     def __init__(self,
                  queue_thread_class: PillarWorkerThread
@@ -164,10 +197,14 @@ class PillarThreadInterface:
         return self.get_command_output(command.id)
 
     def get_command_output(self, uuid: uuid4, only_once: bool = False):
+        debug_wdt = DebugWDT(1)
+        debug_wdt.start()
         output_queue = self.queue_thread_class.output_queue
         ret = None
         found = False
         while not found:
+            if self.debug and debug_wdt.alarm.is_set():
+                raise DebugWDTTimeout
             try:
                 output = output_queue.get_nowait()
                 for id, output in output.items():
