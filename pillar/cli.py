@@ -60,9 +60,7 @@ class CLI:
                 print(node.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
                 print(node.fingerprint_cid)
-                print(node)
                 node.exit()
-                print("complete.")
             elif self.args.identity_command == 'accept_invitation':
                 node.receive_invitation_by_cid(self.args.invitation_cid)
             elif self.args.identity_command == 'show_fingerprints':
@@ -76,7 +74,6 @@ class CLI:
         db_worker_instance.exit()
         cid_messenger_instance.exit()
         ipfs_worker_instance.exit()
-        print("that's all?")
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()

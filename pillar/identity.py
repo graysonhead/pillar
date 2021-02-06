@@ -1,13 +1,12 @@
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
     PillarThreadMethodsRegister, MixedClass
 from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
-    PrimaryIdentity, PillarDBWorker
+    PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
 from .config import PillardConfig
-
-from .exceptions import WrongMessageType, WontUpdateToStaleKey
-from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
+from .exceptions import WrongMessageType
+from .IPRPC.cid_messenger import CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
@@ -43,7 +42,6 @@ class LocalIdentity(PillarDBObject,
                 self.logger.debug('Channel manager started successfully.')
 
     def pre_run(self):
-        print("node prerun")
         self.encryption_helper = EncryptionHelper(self.key_type)
 
         self.public_key_cid = self.id_interface.key_manager.\
@@ -86,16 +84,15 @@ class LocalIdentity(PillarDBObject,
             get_unencrypted_message_from_cid(fingerprint_cid)
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
-        print("identity; _get_info_from_fingerprint_cid")
-        print(fingerprint_info.__dict__)
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
     def create_fingerprint_cid(self):
-        self.logger.debug("Creating fingerprint cid.")
         message = FingerprintMessage(
             public_key_cid=self.public_key_cid,
             fingerprint=str(self.fingerprint))
+        self.logger.debug(f"created fingerprint cid: {message}")
+
         return self.id_interface.cid_messenger.add_unencrypted_message_to_ipfs(
             message)
 
@@ -134,18 +131,17 @@ class Primary(LocalIdentity):
         self.logger.info(f"User primary fingerprint: {self.fingerprint}")
         self.bootstrap_node()
         self.public_key_cid = self.node.public_key_cid
-        print(f"Public key cid: {self.public_key_cid}")
         self.pds_save()
         self.logger.info('Bootstrap complete.')
 
     def bootstrap_node(self):
         self.logger.info("Bootstrapping Node")
+        self.node = Node(self.config)
         self.id_interface.key_manager.generate_local_node_subkey()
 
-        self.node = Node(self.config)
         self.node.fingerprint = self.id_interface.key_manager.\
             get_private_key_for_key_type(
-                PillarKeyType.NODE_SUBKEY).fingerprint
+                PillarKeyType.NODE_SUBKEY).pubkey.fingerprint
         self.logger.info(f"Node fingerprint: {self.node.fingerprint}")
         self.node.public_key_cid = self.id_interface.\
             key_manager.get_user_primary_key_cid()
