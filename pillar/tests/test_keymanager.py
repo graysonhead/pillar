@@ -226,6 +226,7 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.assertEqual(status, KeyManagerStatus.PRIMARY)
 
 
+@skip
 class TestKeyManagerDBOperations(TestCase):
     @patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @patch('asyncio.get_event_loop', new_callable=MagicMock)
@@ -241,5 +242,6 @@ class TestKeyManagerDBOperations(TestCase):
         self.km.import_peer_key_from_cid('not_used')
         self.km.get_key_message_by_cid.assert_called()
 
+    @skip
     def test_import_peers_keys_from_database(self, *args):
         self.km.import_peer_keys_from_database()

@@ -1,14 +1,20 @@
+import multiprocessing as mp
+import traceback
+import os
+import logging
+import pgpy
+from .messages import IPRPCRegistry, IPRPCMessage
+from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
+    PillarWorkerThread, MixedClass
+from ..ipfs import IPFSMixIn, IPFSWorker
 from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
     PillarKeyType
 from ..ipfs import IPFSMixIn
 from ..config import PillardConfig
-from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
-    PillarWorkerThread, MixedClass
-from .messages import IPRPCRegistry, IPRPCMessage
-import pgpy
-import logging
-import os
-import multiprocessing as mp
+<< << << < HEAD
+== == == =
+>>>>>> > e1acf53(fix bootstrap(again)
+                 make sure the node gets the right fingerprint and pubkey cid for its fingerprint_cid)
 
 cid_messenger_register = PillarThreadMethodsRegister()
 
@@ -65,14 +71,12 @@ class CIDMessenger(PillarWorkerThread):
                                                message: IPRPCMessage,
                                                peer_fingerprint: str):
         serialized_message = message.serialize_to_json()
-
-        print(self.encryption_helper)
         encrypted_message = self.encryption_helper.\
             sign_and_encrypt_string_to_peer_fingerprint(
                 serialized_message,
                 peer_fingerprint)
 
-        print("IN CID MESSENGER-----------------------------------")
+        print("CIDMessenger encryption worked.")
         data = self.interface.ipfs.add_str(str(encrypted_message))
         self.logger.info(f"Created new encrypted message: {data['Hash']}")
         return data['Hash']

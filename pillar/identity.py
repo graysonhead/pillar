@@ -49,12 +49,6 @@ class LocalIdentity(PillarDBObject,
 
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
-        self.db_worker_instance = PillarDBWorker(self.config)
-        self.db_worker_instance.start()
-
-    def shutdown_routine(self):
-        self.db_worker_instance.exit()
-        self.cid_messenger_instance.exit()
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
@@ -93,6 +87,8 @@ class LocalIdentity(PillarDBObject,
             get_unencrypted_message_from_cid(fingerprint_cid)
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
+        print("identity; _get_info_from_fingerprint_cid")
+        print(fingerprint_info.__dict__)
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
@@ -137,21 +133,22 @@ class Primary(LocalIdentity):
         self.key = self.id_interface.key_manager.get_private_key_for_key_type(
             self.key_type)
         self.fingerprint = self.key.fingerprint
-        self.logger.info(f"User primary fingerprint: {self.fingerprint}")
         self.bootstrap_node()
         self.public_key_cid = self.node.public_key_cid
+        print(f"Public key cid: {self.public_key_cid}")
+        self.fingerprint_cid = self.create_fingerprint_cid()
         self.pds_save()
-        self.logger.info('Bootstrap complete.')
+        self.logger.info(
+            f'Bootstrap complete; node fingerprint: {self.fingerprint}')
 
     def bootstrap_node(self):
         self.logger.info("Bootstrapping Node")
-        self.node = Node(self.config)
         self.id_interface.key_manager.generate_local_node_subkey()
 
+        self.node = Node(self.config)
         self.node.fingerprint = self.id_interface.key_manager.\
             get_private_key_for_key_type(
-                PillarKeyType.NODE_SUBKEY).pubkey.fingerprint
-        self.logger.info(f"Node fingerprint: {self.node.fingerprint}")
+                PillarKeyType.NODE_SUBKEY).fingerprint
         self.node.public_key_cid = self.id_interface.\
             key_manager.get_user_primary_key_cid()
         self.node.fingerprint_cid = self.node.create_fingerprint_cid()

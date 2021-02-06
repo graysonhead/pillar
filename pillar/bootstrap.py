@@ -1,8 +1,11 @@
 from argparse import Namespace
 from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
-from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
-from pillar.identity import PrimaryIdentityMixIn
+from pillar.IPRPC.cid_messenger import CIDMessenger
+from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn,\
+    PillarKeyType
+from pillar.identity import PrimaryIdentityMixIn, Primary
+from pillar.ipfs import IPFSWorker
 from pillar.multiproc import MixedClass
 from pillar.simple_daemon import Daemon
 from pathlib import Path
@@ -54,11 +57,25 @@ class Bootstrapper:
             sys.exit(1)
 
     def bootstrap_pre(self):
-        self.daemon = Daemon(self.config, bootstrap=True)
-        self.daemon.start()
+
+        self.ipfs_worker = IPFSWorker("bootstrap")
+        self.ipfs_worker.start()
+
+        self.cid_messenger = CIDMessenger(
+            PillarKeyType.USER_PRIMARY_KEY, self.config)
+        self.cid_messenger.start()
+
+        self.key_manager = self.bootstrap_keymanager_pre()
+        self.key_manager.start()
+
+        self.primary_worker = Primary(self.config)
+        self.primary_worker.start()
 
     def bootstrap_post(self):
-        self.daemon.exit()
+        self.key_manager.exit()
+        self.cid_messenger.exit()
+        self.ipfs_worker.exit()
+        self.primary_worker.exit()
 
     def bootstrap_pds_pre(self) -> PillarDataStore:
         pds = PillarDataStore(self.config)

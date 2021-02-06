@@ -383,6 +383,7 @@ class KeyManager(PillarDBObject,
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
         self.user_primary_key_cid = data['Hash']
+        print(self.user_primary_key_cid)
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
@@ -431,11 +432,42 @@ class KeyManager(PillarDBObject,
 
     @ key_manager_methods.register_method
     def get_user_primary_key_cid(self):
+        print(self.user_primary_key_cid)
         return self.user_primary_key_cid
 
     @ key_manager_methods.register_method
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
+
+    @ key_manager_methods.register_method
+    def printer(self, msg: str):
+        print(msg)
+
+
+class QueueCommand:
+    def __init__(self, command_name: str, *args, **kwargs):
+        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
+        self.command_name = command_name
+        self.args = args
+        self.kwargs = kwargs
+        self.id = uuid4()
+
+    def __dict__(self):
+        return {"id": self.id,
+                "command_name": self.command_name,
+                "args": self.args,
+                "kwargs": self.kwargs}
+
+
+class KeyManagerCommandCallable:
+
+    def __init__(self, command: str, parent_instance):
+        self.command = command
+        self.parent_instance = parent_instance
+
+    def __call__(self, *args, **kwargs):
+        return self.parent_instance.key_manager_command(self.command,
+                                                        *args, **kwargs)
 
 
 class KeyManagerCommandQueueMixIn(PillarThreadMixIn):
@@ -469,6 +501,7 @@ class EncryptionHelper:
                                                     remote_fingerprint: str):
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
+        print(remote_fingerprint)
 
         print("in encryption helper")
         peer_key = self.interface.key_manager.\
