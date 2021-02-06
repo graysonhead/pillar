@@ -1,14 +1,13 @@
 from ..config import PillardConfig
 from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
     PillarKeyType
-from ..ipfs import IPFSMixIn, IPFSWorker
+from ..ipfs import IPFSMixIn
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
 from .messages import IPRPCRegistry, IPRPCMessage
 import pgpy
 import logging
 import os
-import traceback
 import multiprocessing as mp
 
 cid_messenger_register = PillarThreadMethodsRegister()
