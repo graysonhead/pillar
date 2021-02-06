@@ -1,7 +1,9 @@
 from argparse import Namespace
 from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
-from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
+from pillar.IPRPC.cid_messenger import CIDMessenger
+from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn,\
+    PillarKeyType
 from pillar.identity import PrimaryIdentityMixIn, Primary
 from pillar.ipfs import IPFSWorker
 from pillar.multiproc import MixedClass
@@ -36,7 +38,8 @@ class Bootstrapper:
         self.bootstrap()
 
     def bootstrap(self):
-        self.bootstrap_pre()
+        self.config_path, self.config = self.bootstrap_config_file_pre()
+        self.pds = self.bootstrap_pds_pre()
         print("We will take the follwing actions:\n")
         print("======================")
         for step in self.planned_steps:
@@ -44,14 +47,34 @@ class Bootstrapper:
             print("======================")
         continue_prompt = input("Take these actions? yes/[no]")
         if continue_prompt.lower() in 'yes':
+            self.bootstrap_pre()
+
             self.bootstrap_execute()
+
+            self.bootstrap_post()
         else:
             sys.exit(1)
 
     def bootstrap_pre(self):
-        self.config_path, self.config = self.bootstrap_config_file_pre()
-        self.pds = self.bootstrap_pds_pre()
+
+        self.ipfs_worker = IPFSWorker("bootstrap")
+        self.ipfs_worker.start()
+
+        self.cid_messenger = CIDMessenger(
+            PillarKeyType.USER_PRIMARY_KEY, self.config)
+        self.cid_messenger.start()
+
         self.key_manager = self.bootstrap_keymanager_pre()
+        self.key_manager.start()
+
+        self.primary_worker = Primary(self.config)
+        self.primary_worker.start()
+
+    def bootstrap_post(self):
+        self.key_manager.exit()
+        self.cid_messenger.exit()
+        self.ipfs_worker.exit()
+        self.primary_worker.exit()
 
     def bootstrap_pds_pre(self) -> PillarDataStore:
         pds = PillarDataStore(self.config)
@@ -99,7 +122,7 @@ class Bootstrapper:
         exit(1)
 
     def bootstrap_keymanager_pre(self) -> KeyManager:
-        keymanager = KeyManager(self.config, self.pds, db_import=False)
+        keymanager = KeyManager(self.config)
         if keymanager.node_subkey is not None:
             if not self.args.purge:
                 raise FileExistsError(
@@ -112,27 +135,8 @@ class Bootstrapper:
         return keymanager
 
     def bootstrap_keymanager_exec(self):
-        self.logger.info("Starting IPFS Worker")
-        ipfs_worker = IPFSWorker(self.config)
-        ipfs_worker.start()
-
-        self.logger.info("Starting key manager worker")
-        self.key_manager.start()
-
-        self.logger.info("Starting primary identity worker")
-        primary_worker = Primary(self.config)
-        primary_worker.start()
-
-        self.logger.info("Bootstrapping primary identity.")
         self.interface.primary_identity.bootstrap(self.user_key_name,
                                                   self.user_key_email)
-
-        self.logger.info("Stopping primary identity worker")
-        primary_worker.exit()
-        self.logger.info("Stopping key manager worker")
-        self.key_manager.exit()
-        self.logger.info("Stopping IPFS worker")
-        ipfs_worker.exit()
 
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()

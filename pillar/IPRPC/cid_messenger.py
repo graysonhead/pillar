@@ -1,5 +1,6 @@
 from ..config import PillardConfig
-from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn
+from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
+    PillarKeyType
 from ..ipfs import IPFSMixIn, IPFSWorker
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
@@ -7,6 +8,7 @@ from .messages import IPRPCRegistry, IPRPCMessage
 import pgpy
 import logging
 import os
+import traceback
 import multiprocessing as mp
 
 cid_messenger_register = PillarThreadMethodsRegister()
@@ -24,21 +26,17 @@ class CIDMessenger(PillarWorkerThread):
     methods_register = cid_messenger_register
 
     def __init__(self,
-                 encryption_helper: EncryptionHelper,
+                 pillar_key_type: PillarKeyType,
                  config: PillardConfig):
         self.logger = logging.getLogger('<CIDMessenger>')
         self.logger.info("Starting CIDMessenger")
-        self.encryption_helper = encryption_helper
         self.config = config
+        self.pillar_key_type = pillar_key_type
         self.interface = CIDMessengerInterface()
         super().__init__()
 
     def pre_run(self):
-        self.ipfs_worker_instance = IPFSWorker(str(self))
-        self.ipfs_worker_instance.start()
-
-    def shutdown_routine(self):
-        self.ipfs_worker_instance.exit()
+        self.encryption_helper = EncryptionHelper(self.pillar_key_type)
 
     @cid_messenger_register.register_method
     def get_and_decrypt_message_from_cid(self, cid: str, verify: bool = True):
@@ -68,14 +66,12 @@ class CIDMessenger(PillarWorkerThread):
                                                message: IPRPCMessage,
                                                peer_fingerprint: str):
         serialized_message = message.serialize_to_json()
-
-        self.interface.key_manager.printer("can I send from here?")
         encrypted_message = self.encryption_helper.\
             sign_and_encrypt_string_to_peer_fingerprint(
                 serialized_message,
                 peer_fingerprint)
 
-        print("IN CID MESSENGER-----------------------------------")
+        print("CIDMessenger encryption worked.")
         data = self.interface.ipfs.add_str(str(encrypted_message))
         self.logger.info(f"Created new encrypted message: {data['Hash']}")
         return data['Hash']
