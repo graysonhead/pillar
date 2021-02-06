@@ -76,8 +76,6 @@ class LocalIdentity(PillarDBObject,
         )
         self.logger.info(
             f'Creating invitation for peer {peer_fingerprint_cid}')
-        self.id_interface.key_manager.printer(
-            "What about from here? Does this work?")
         return self.id_interface.cid_messenger.\
             add_encrypted_message_to_ipfs_for_peer(invitation, fingerprint)
 
@@ -94,6 +92,7 @@ class LocalIdentity(PillarDBObject,
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
     def create_fingerprint_cid(self):
+        self.logger.debug("Creating fingerprint cid.")
         message = FingerprintMessage(
             public_key_cid=self.public_key_cid,
             fingerprint=str(self.fingerprint))
@@ -132,13 +131,12 @@ class Primary(LocalIdentity):
         self.key = self.id_interface.key_manager.get_private_key_for_key_type(
             self.key_type)
         self.fingerprint = self.key.fingerprint
+        self.logger.info(f"User primary fingerprint: {self.fingerprint}")
         self.bootstrap_node()
         self.public_key_cid = self.node.public_key_cid
         print(f"Public key cid: {self.public_key_cid}")
-        self.fingerprint_cid = self.create_fingerprint_cid()
         self.pds_save()
-        self.logger.info(
-            f'Bootstrap complete; node fingerprint: {self.fingerprint}')
+        self.logger.info('Bootstrap complete.')
 
     def bootstrap_node(self):
         self.logger.info("Bootstrapping Node")
@@ -148,6 +146,7 @@ class Primary(LocalIdentity):
         self.node.fingerprint = self.id_interface.key_manager.\
             get_private_key_for_key_type(
                 PillarKeyType.NODE_SUBKEY).fingerprint
+        self.logger.info(f"Node fingerprint: {self.node.fingerprint}")
         self.node.public_key_cid = self.id_interface.\
             key_manager.get_user_primary_key_cid()
         self.node.fingerprint_cid = self.node.create_fingerprint_cid()
