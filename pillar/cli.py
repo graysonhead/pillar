@@ -5,9 +5,11 @@ import logging
 from pillar.identity import Node
 from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
-from pillar.keymanager import KeyManager
-from pillar.db import PillarDataStore
+from pillar.keymanager import KeyManager, PillarKeyType
+from pillar.db import PillarDataStore, PillarDBWorker
 from pillar.multiproc import PillarThreadInterface
+from pillar.IPRPC.cid_messenger import CIDMessenger
+from pillar.ipfs import IPFSWorker
 from pathlib import Path
 import sys
 
@@ -32,22 +34,35 @@ class CLI:
             exit(0)
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
-                self.config
+                self.config,
+                '/tmp/pillar.pid',
+                stdout=sys.stdout,
+                stderr=sys.stderr
             )
             daemon.start()
-            daemon.start_housekeeping()
         elif self.args.sub_command == 'identity':
             key_manager = KeyManager(self.config)
             key_manager.start()
 
+            ipfs_worker_instance = IPFSWorker(str(self))
+            ipfs_worker_instance.start()
+            cid_messenger_instance = CIDMessenger(
+                PillarKeyType.NODE_SUBKEY,
+                self.config)
+            cid_messenger_instance.start()
+            db_worker_instance = PillarDBWorker(self.config)
+            db_worker_instance.start()
+
             pds = PillarDataStore(self.config)
             node = Node.get_local_instance(self.config, pds)
             node.start()
-
             if self.args.identity_command == 'create_invitation':
                 print(node.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
                 print(node.fingerprint_cid)
+                print(node)
+                node.exit()
+                print("complete.")
             elif self.args.identity_command == 'accept_invitation':
                 node.receive_invitation_by_cid(self.args.invitation_cid)
             elif self.args.identity_command == 'show_fingerprints':
@@ -57,6 +72,11 @@ class CLI:
         else:
             print("No subcommand provided")
             sys.exit(1)
+        key_manager.exit()
+        db_worker_instance.exit()
+        cid_messenger_instance.exit()
+        ipfs_worker_instance.exit()
+        print("that's all?")
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()
