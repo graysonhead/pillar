@@ -45,19 +45,9 @@ class LocalIdentity(PillarDBObject,
     def pre_run(self):
         print("node prerun")
         self.encryption_helper = EncryptionHelper(self.key_type)
-        self.cid_messenger_instance = CIDMessenger(
-            self.encryption_helper,
-            self.config)
-        self.cid_messenger_instance.start()
 
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
-        self.db_worker_instance = PillarDBWorker(self.config)
-        self.db_worker_instance.start()
-
-    def shutdown_routine(self):
-        self.db_worker_instance.exit()
-        self.cid_messenger_instance.exit()
 
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
@@ -98,13 +88,14 @@ class LocalIdentity(PillarDBObject,
             get_unencrypted_message_from_cid(fingerprint_cid)
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
+        print("identity; _get_info_from_fingerprint_cid")
+        print(fingerprint_info.__dict__)
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
-            public_key_cid=self.id_interface.key_manager.
-            get_user_primary_key_cid(),
+            public_key_cid=self.public_key_cid,
             fingerprint=str(self.fingerprint))
         return self.id_interface.cid_messenger.add_unencrypted_message_to_ipfs(
             message)
@@ -135,23 +126,32 @@ class Primary(LocalIdentity):
 
     @ primary_identity_methods.register_method
     def bootstrap(self, name, email):
+        self.logger.info("Bootstrapping Primary")
         self.id_interface.key_manager.generate_user_primary_key(name, email)
-        self.id_interface.key_manager.generate_local_node_subkey()
-        self.public_key_cid = self.id_interface.\
-            key_manager.get_user_primary_key_cid()
+
         self.key = self.id_interface.key_manager.get_private_key_for_key_type(
             self.key_type)
         self.fingerprint = self.key.fingerprint
+        self.bootstrap_node()
+        self.public_key_cid = self.node.public_key_cid
+        print(f"Public key cid: {self.public_key_cid}")
         self.fingerprint_cid = self.create_fingerprint_cid()
-
-        node = Node(self.config)
-        node.fingerprint_cid = self.fingerprint_cid
-        node.fingerprint = self.fingerprint
-        node.public_key_cid = self.public_key_cid
-        node.pds_save()
         self.pds_save()
         self.logger.info(
-            f'Bootstrapped node with fingerprint: {self.fingerprint}')
+            f'Bootstrap complete; node fingerprint: {self.fingerprint}')
+
+    def bootstrap_node(self):
+        self.logger.info("Bootstrapping Node")
+        self.id_interface.key_manager.generate_local_node_subkey()
+
+        self.node = Node(self.config)
+        self.node.fingerprint = self.id_interface.key_manager.\
+            get_private_key_for_key_type(
+                PillarKeyType.NODE_SUBKEY).fingerprint
+        self.node.public_key_cid = self.id_interface.\
+            key_manager.get_user_primary_key_cid()
+        self.node.fingerprint_cid = self.node.create_fingerprint_cid()
+        self.node.pds_save()
 
 
 class PrimaryIdentityMixIn(PillarThreadMixIn):

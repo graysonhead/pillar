@@ -267,6 +267,7 @@ class PillarDBObject:
         return attribs
 
     def pds_save(self):
+        self.logger.info("Saving to database.")
         model_instance = self._pds_generate_model()
         self.interface.db.add_item(model_instance)
 

@@ -100,7 +100,7 @@ class PillarWorkerThread(Process):
         self.loop = None
         super().__init__()
         if not hasattr(self, "logger"):
-            self.logger = logging.getLogger("<{self.__class__.__name__}>")
+            self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
 
     def each_loop(self):
         if self.__class__.__name__ == "KeyManager":
