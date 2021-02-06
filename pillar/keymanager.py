@@ -62,6 +62,7 @@ class PillarPGPKey(PillarDBObject):
         self.key = None
         self.invitation_id = None
         self.invitation = None
+        super().__init__()
 
     def load_pgpy_key(self, key: pgpy.PGPKey):
         self.fingerprint = key.fingerprint
@@ -247,13 +248,13 @@ class KeyManager(PillarWorkerThread):
 
     def get_key_message_by_cid(self, cid: str) -> pgpy.PGPMessage:
         self.ensure_cid_content_present(cid)
-        msg=pgpy.PGPMessage.from_file(
+        msg = pgpy.PGPMessage.from_file(
             os.path.join(self.config.get_value('ipfs_directory'), cid))
         return msg
 
     def verify_and_extract_key_from_key_message(self,
                                                 key_message: pgpy.PGPMessage):
-        key, other=pgpy.PGPKey.from_blob(str(key_message.message))
+        key, other = pgpy.PGPKey.from_blob(str(key_message.message))
         with self.keyring.key(key.fingerprint) as original_key:
             if original_key.verify(key_message):
                 return key
@@ -270,7 +271,7 @@ class KeyManager(PillarWorkerThread):
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
         if self.user_primary_key_cid is None:
-            key=pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+            key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
             key.add_uid(uid,
                         usage=KeyOptions.usage,
                         hashes=KeyOptions.hashes,
@@ -283,29 +284,29 @@ class KeyManager(PillarWorkerThread):
             raise KeyTypeAlreadyPresent
 
     def set_registration_primary_key_cid(self, cid):
-        self.registration_primary_key_cid=cid
+        self.registration_primary_key_cid = cid
 
     def set_user_primary_key_cid(self, cid):
-        self.user_primary_key_cid=cid
+        self.user_primary_key_cid = cid
 
     def generate_registration_primary_key(self):
-        uid=pgpy.PGPUID.new(
+        uid = pgpy.PGPUID.new(
             uuid4(),
             comment=PillarKeyType.REGISTRATION_PRIMARY_KEY.value,
             email='noreply@pillarcloud.org')
-        cid, key=self.generate_primary_key(uid)
+        cid, key = self.generate_primary_key(uid)
         self.set_registration_primary_key_cid(cid)
-        self.registration_primary_key_cid=cid
-        self.registration_primary_key=self.load_keytype(
+        self.registration_primary_key_cid = cid
+        self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
 
     @ key_manager_methods.register_method
     def generate_user_primary_key(self, name: str, email: str):
-        uid=pgpy.PGPUID.new(name,
+        uid = pgpy.PGPUID.new(name,
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
                               email=email)
-        key=self.generate_primary_key(uid)
-        self.user_primary_key=key
+        key = self.generate_primary_key(uid)
+        self.user_primary_key = key
         self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
         cid=self.add_key_message_to_ipfs(key.pubkey)
