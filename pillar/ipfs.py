@@ -58,9 +58,8 @@ class IPFSWorker(PillarWorkerThread):
     shutdown_callback = Event()
     methods_register = ipfs_worker_register
 
-    def __init__(self, worker_id: str, ipfs_client: IPFSClient = None):
+    def __init__(self, ipfs_client: IPFSClient = None):
         super().__init__()
-        self.worker_id = worker_id
         self.ipfs_client = ipfs_client or IPFSClient()
         self.logger = logging.getLogger(self.__repr__())
         self.logger.info(f"Spawned IPFS Worker {str(self)}")
@@ -78,7 +77,7 @@ class IPFSWorker(PillarWorkerThread):
         return await self.ipfs_client.add_file(*files, **kwargs)
 
     def __repr__(self):
-        return f"<IPFSWorker {self.worker_id}>"
+        return "<IPFSWorker>"
 
 
 class IPFSMixIn(PillarThreadMixIn):

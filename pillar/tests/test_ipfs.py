@@ -59,7 +59,7 @@ class TestIPFSWorker(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.ipfs_client = AsyncMock()
-        self.worker = IPFSWorker('1', ipfs_client=self.ipfs_client)
+        self.worker = IPFSWorker(ipfs_client=self.ipfs_client)
 
     async def test_get_file(self):
         await self.worker.get_file('fake_cid', dstdir='/test_dir')
@@ -76,4 +76,4 @@ class TestIPFSWorker(asynctest.TestCase):
 
     async def test_worker_repr(self):
         repr = str(self.worker)
-        self.assertEqual("<IPFSWorker 1>", repr)
+        self.assertEqual("<IPFSWorker>", repr)
