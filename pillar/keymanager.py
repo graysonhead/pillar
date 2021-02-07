@@ -145,14 +145,16 @@ class KeyManager(PillarWorkerThread):
 
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
         """
-        Import a new key into the keyring
+        Import a new key into the keyring and, optionally (if persist is
+        True), save it to the database.
         """
         if self.key_already_in_keyring(peer_key.fingerprint):
             pass
             raise CannotImportSamePrimaryFingerprint
         else:
+            print(type(peer_key.fingerprint))
             self.logger.info(
-                f"Importing new public key: {peer_key.fingerprint}")
+                f"Importing new public key")
             self.keyring.load(peer_key)
             if persist:
                 key = PillarPGPKey()
@@ -171,8 +173,8 @@ class KeyManager(PillarWorkerThread):
         try:
             new_key = self.verify_and_extract_key_from_key_message(
                 new_key_message)
-            self.keyring.load(new_key)
-            return new_key.fingerprint
+#            self.keyring.load(new_key)
+#            return new_key.fingerprint
         except KeyError:
             raise KeyNotInKeyring
         self.logger.info(
@@ -202,6 +204,8 @@ class KeyManager(PillarWorkerThread):
             new_sig = self.get_value_and_requeue(key._signatures)
             self.logger.info(f'comparing new key time: {new_sig.created}'
                              f' to old key time: {original_sig.created}')
+            print(f'comparing new key time: {new_sig.created}'
+                  f' to old key time: {original_sig.created}')
             if original_sig.created < new_sig.created:
                 return True
             else:
