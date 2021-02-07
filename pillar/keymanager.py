@@ -420,10 +420,6 @@ class KeyManager(PillarWorkerThread):
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
 
-    @ key_manager_methods.register_method
-    def printer(self, msg: str):
-        print(msg)
-
 
 class QueueCommand:
     def __init__(self, command_name: str, *args, **kwargs):
