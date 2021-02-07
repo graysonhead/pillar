@@ -20,3 +20,11 @@ class MoreTestSimpleDaemon(TestCase):
     def test_pre_run(self, *args):
         self.daemon.pre_run()
         assert(True)
+
+    @patch('multiprocessing.Process.run', new_callable=MagicMock)
+    @patch('pillar.multiproc.PillarWorkerThread.run', new_callable=MagicMock)
+    @patch('pillar.multiproc.PillarWorkerThread.exit', new_callable=MagicMock)
+    def test_shutdown_routine(self, *args):
+        self.daemon.pre_run()
+        self.daemon.shutdown_routine()
+        assert(True)
