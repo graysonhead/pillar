@@ -34,7 +34,9 @@ class CLI:
             Bootstrapper(self.args)
             exit(0)
         elif self.args.sub_command == 'daemon':
-            daemon = Daemon(self.config)
+            daemon = PillarDaemon(
+                self.config
+            )
             daemon.start()
         elif self.args.sub_command == 'identity':
             daemon = Daemon(self.config)

@@ -1,169 +1,101 @@
-"""
-Loosely based on Generic linux daemon base class for python 3.x.,
-as downloaded on 30 Jan 2021 from:
-https://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python/
-
-Modified to add graceful shutdown for child processes.
-"""
-from pillar.keymanager import KeyManager
-from pillar.config import PillardConfig
-from pillar.ipfs import IPFSWorker
-from pillar.identity import Node
-from pillar.db import PillarDataStore
+from pillar.config import PillardConfig, get_ipfs_config_options
+from pillar.ipfs import IPFSWorker, IPFSClient
 import logging
 import multiprocessing
-import signal
-import time
-import sys
-import os
+from time import sleep
+
+
+class ProcessManager:
+    process_type = multiprocessing.Process
+
+    def __init__(self):
+        self.logger = logging.getLogger(self.__repr__())
+        self.processes = []
+        self.initialize_processes()
+
+    def initialize_processes(self):
+        pass
+
+    def check_processes(self):
+        pass
+
+    def start_all_processes(self):
+        for process in self.processes:
+            if not process.is_alive():
+                if not process.exitcode:
+                    process.start()
+
+    def stop_all_processes(self, join_timeout: int = 5):
+        for process in self.processes:
+            self.logger.info(f"Sending shutdown event to {process}")
+            process.shutdown_callback.set()
+        for process in self.processes:
+            process.join(join_timeout)
+            if process.exitcode is None:
+                process.terminate()
+
+    def prune_dead_processes(self):
+        processes_to_remove = []
+        for process in self.processes:
+            if not process.is_alive():
+                if process.exitcode is not None:
+                    processes_to_remove.append(process)
+
+        for process in processes_to_remove:
+            self.logger.warning(f"{process} died unexpectedly and was pruned")
+            process.join()
+            self.processes.remove(process)
+        if processes_to_remove:
+            self.check_processes()
+
+
+class IPFSWorkerManager(ProcessManager):
+
+    def __init__(self, config: PillardConfig):
+        self.config = config
+        super().__init__()
+
+    def get_ipfs_config(self):
+        return get_ipfs_config_options(self.config)
+
+    def get_new_process(self):
+        ipfs_client = IPFSClient(aioipfs_config=self.get_ipfs_config())
+        return IPFSWorker(ipfs_client=ipfs_client)
+
+    def initialize_processes(self):
+        for i in range(self.config.get_value('ipfs_workers')):
+            self.processes.append(self.get_new_process())
+
+    def check_processes(self):
+        number_of_processes = len(self.processes)
+        desired_processes = self.config.get_value('ipfs_workers')
+        if number_of_processes < desired_processes:
+            missing_processes = desired_processes - number_of_processes
+            for i in range(missing_processes):
+                self.processes.append(self.get_new_process())
+            self.start_all_processes()
 
 
 class PillarDaemon:
 
     def __init__(self,
-                 config: PillardConfig,
-                 pidfile: str,
-                 stdout,
-                 stderr):
+                 config: PillardConfig):
         self.logger = logging.getLogger(self.__repr__())
         self.config = config
-        self.pidfile = pidfile
-        self.stdout = stdout or open(os.devnull, 'a+')
-        self.stderr = stderr or open(os.devnull, 'a+')
-        self.pds = PillarDataStore(self.config)
-        self.shutdown_callback = multiprocessing.Event()
-        signal.signal(signal.SIGTERM, self.stop)
-        signal.signal(signal.SIGINT, self.stop)
+        self.ipfs_workers = IPFSWorkerManager(self.config)
 
-    def daemonize(self):
-        """Deamonize class. UNIX double fork mechanism."""
+    def start(self, break_immediately=False):
+        self.ipfs_workers.start_all_processes()
+        while True:
+            if break_immediately:
+                break
+            sleep(1)
 
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # exit first parent
-                sys.exit(0)
-        except OSError as err:
-            sys.stderr.write('fork #1 failed: {0}\n'.format(err))
-            sys.exit(1)
+    def stop(self):
+        self.ipfs_workers.stop_all_processes()
 
-            # decouple from parent environment
-            os.chdir('/')
-            os.setsid()
-            os.umask(0)
-
-        # do second fork
-        try:
-            pid = os.fork()
-            if pid > 0:
-
-                # exit from second parent
-                sys.exit(0)
-        except OSError as err:
-            sys.stderr.write('fork #2 failed: {0}\n'.format(err))
-            sys.exit(1)
-
-        # redirect standard file descriptors
-        sys.stdout.flush()
-        sys.stderr.flush()
-        si = open(os.devnull, 'r')
-
-        os.dup2(si.fileno(), sys.stdin.fileno())
-        os.dup2(self.stdout.fileno(), sys.stdout.fileno())
-        os.dup2(self.stderr.fileno(), sys.stderr.fileno())
-
-        pid = str(os.getpid())
-        with open(self.pidfile, 'w+') as f:
-            f.write(pid + '\n')
-
-    def delpid(self):
-        self.logger.debug("Removing PID file.")
-        os.remove(self.pidfile)
-
-    def start(self):
-        """Start the daemon."""
-
-        # Check for a pidfile to see if the daemon already runs
-        try:
-            with open(self.pidfile, 'r') as pf:
-                pid = int(pf.read().strip())
-        except IOError:
-            pid = None
-
-        if pid:
-            message = "pidfile {0} already exist. " + \
-                "Daemon already running?\n"
-            sys.stderr.write(message.format(self.pidfile))
-            sys.exit(1)
-
-        # Start the daemon
-        self.daemonize()
-        self.run()
-
-    def stop(self, *args):
-        """Stop the daemon."""
-        self.logger.info("Stopping.")
-        self.stop_child_procs()
-
-        # Get the pid from the pidfile
-        try:
-            with open(self.pidfile, 'r') as pf:
-                pid = int(pf.read().strip())
-        except IOError:
-            pid = None
-
-        if not pid:
-            message = "pidfile {0} does not exist. " + \
-                "Daemon not running?\n"
-            sys.stderr.write(message.format(self.pidfile))
-            return  # not an error in a restart
-
-        self.shutdown_callback.set()
-        self.delpid()
-
-    def restart(self):
-        """Restart the daemon."""
+    def __del__(self):
         self.stop()
-        self.start()
-
-    def start_ipfs_workers(self):
-        for worker in self.ipfs_workers:
-            worker.start()
-
-    def stop_ipfs_workers(self):
-        for worker in self.ipfs_workers:
-            worker.exit()
-
-    def get_ipfs_workers(self, config: PillardConfig):
-        workers = []
-        for i in range(config.get_value('ipfs_workers')):
-            workers.append(IPFSWorker(str(i)))
-        return workers
-
-    def stop_child_procs(self):
-        self.logger.info("stopping node.")
-        self.node.exit()
-        self.logger.info("stopping key manager.")
-        self.key_manager.exit()
-        self.logger.info("stopping ipfs workers.")
-        self.stop_ipfs_workers()
-
-    def hodor(self):
-        while not self.shutdown_callback.is_set():
-            time.sleep(0.1)
-        self.logger.info("daemon stopped.")
-
-    def run(self):
-        self.key_manager = KeyManager(self.config)
-        self.node = Node(self.config)
-        self.ipfs_workers = self.get_ipfs_workers(self.config)
-        self.logger.info("Starting IPFS workers")
-        self.start_ipfs_workers()
-        self.logger.info("Starting key manager worker")
-        self.key_manager.start()
-        self.logger.info("Starting node worker")
-        self.node.start()
-        self.hodor()
 
     def __repr__(self):
         return "<PillarDaemon>"

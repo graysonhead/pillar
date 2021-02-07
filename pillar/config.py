@@ -200,5 +200,24 @@ class PillardConfig(Config):
             [str],
             default_value='/tmp/pillar_socket',
             description="Path of the local socket used for pillarctl commands."
+        ),
+        ConfigOption(
+            'ipfs_hostname',
+            [str],
+            default_value='localhost',
+            description="Hostname or IP address of IPFS API server."
+        ),
+        ConfigOption(
+            'ipfs_port',
+            [int],
+            default_value=5001,
+            description="Port of IPFS API server."
         )
     ]
+
+
+def get_ipfs_config_options(config: PillardConfig):
+    return_dict = {}
+    return_dict.update({'host': config.get_value('ipfs_hostname')})
+    return_dict.update({'port': config.get_value('ipfs_port')})
+    return return_dict
