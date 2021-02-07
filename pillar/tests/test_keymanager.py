@@ -104,6 +104,8 @@ class TestEmptyKeyManager(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
+           new_callable=MagicMock)
     def test_import_peer_key(self, *args):
 
         keyfunction = mock_pubkey0()
@@ -137,6 +139,8 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
     @patch('pillar.keymanager.PillarPGPKey',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
