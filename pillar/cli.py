@@ -3,7 +3,6 @@ from pillar.config import PillardConfig
 from argparse import Namespace
 import logging
 from pillar.bootstrap import Bootstrapper
-from pillar.daemon import PillarDaemon
 from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.simple_daemon import Daemon, SimpleDaemonMixIn
 from pathlib import Path
@@ -48,10 +47,6 @@ class CLI:
             elif self.args.identity_command == 'accept_invitation':
                 self.interface.daemon.node_accept_invitation(
                     self.args.invitation_cid)
-            elif self.args.identity_command == 'show_fingerprints':
-                print("Local Fingerprints:")
-                print(f"Node: {node.fingerprint}")
-                print(f"Peers: {self.key_manager.keyring.fingerprints()}")
             daemon.exit()
         else:
             print("No subcommand provided")
