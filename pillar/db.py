@@ -246,6 +246,9 @@ class PillarDBObject:
     model = None
 
     def __init__(self):
+        if not hasattr(self, "logger"):
+            self.logger = logging.getLogger("<PillarDBObject>")
+
         self.interface = DBInterface()
 
     def _pds_generate_model(self):

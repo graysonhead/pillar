@@ -1,12 +1,10 @@
 import pgpy
 from unittest import TestCase
-from ..keymanager import KeyManager, KeyOptions, PillarKeyType,\
-    KeyManagerStatus
+from ..keymanager import KeyManager, KeyOptions, PillarKeyType
 from ..config import PillardConfig
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 import os
-from unittest import skip
 from unittest.mock import patch, MagicMock
 from pgpy.constants import PubKeyAlgorithm
 import shutil
@@ -20,9 +18,21 @@ def remove_directories(dirs: list):
             pass
 
 
+class TruthyMock(MagicMock):
+    def __call__(self, *args, **kwargs) -> bool:
+        super().__call__(*args, **kwargs)
+        return True
+
+
+class FalseyMock(MagicMock):
+    def __call__(self, *args, **kwargs) -> bool:
+        super().__call__(*args, **kwargs)
+        return False
+
+
 class mock_new_pgp_public_key(MagicMock):
     def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
-        super().__call__()
+        super().__call__(*args, **kwargs)
 
         uid = pgpy.PGPUID.new(
             'Mock User',
@@ -40,11 +50,8 @@ class mock_new_pgp_public_key(MagicMock):
 class MockPGPKeyFromFile(MagicMock):
     key_path = './data/pub.key'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def __call__(self, *args, **kwargs) -> pgpy.PGPMessage:
-        super().__call__()
+        super().__call__(*args, **kwargs)
         m = pgpy.PGPMessage.from_file(
             os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          self.key_path))
@@ -74,29 +81,46 @@ class TestEmptyKeyManager(TestCase):
     def setUp(self, *args):
         self.config = PillardConfig(config_directory="/this/shouldnt/exist")
         self.km = KeyManager(self.config)
-        self.km.start()
 
     def test_instantiate_keymanager_class(self):
         assert(isinstance(self.km, KeyManager))
 
-    @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
-            new_callable=mock_pubkey0)
-    @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
-            new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
+           new_callable=mock_pubkey0)
+    @patch('pillar.keymanager.KeyManager.import_peer_key',
+           new_callable=MagicMock)
+    def test_import_peer_key_from_cid(self, *args):
+        key = mock_pubkey0()
+        fake_cid = 'himom'
+        self.km.import_peer_key_from_cid(fake_cid)
+        self.km.get_key_message_by_cid.assert_called_with(fake_cid)
+        self.km.import_peer_key.assert_called_with(key)
+
+    @patch('pillar.keymanager.KeyManager.key_already_in_keyring',
+           new_callable=FalseyMock)
+    @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.pds_save',
+           new_callable=MagicMock)
     def test_import_peer_key(self, *args):
 
-        print(self.km)
-        self.km.import_peer_key_from_cid('not_used')
-        self.km.get_key_message_by_cid.assert_called()
+        keyfunction = mock_pubkey0()
+        key, o = pgpy.PGPKey.from_blob(keyfunction().message)
 
-    @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
-            new_callable=mock_pubkey0)
-    @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
-            new_callable=MagicMock)
-    def test_import_peer_key_twice_raises_exception(self, *args):
-        self.km.import_peer_key_from_cid('not_used')
+        self.km.import_peer_key(key)
+        self.km.key_already_in_keyring.assert_called_with(key.fingerprint)
+
+    @patch('pillar.keymanager.KeyManager.key_already_in_keyring',
+           new_callable=TruthyMock)
+    @patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
+           new_callable=mock_pubkey0)
+    def test_import_peer_key_raises_exception(self, *args):
+
+        keyfunction = mock_pubkey0()
+        key, o = pgpy.PGPKey.from_blob(keyfunction().message)
+
         with self.assertRaises(CannotImportSamePrimaryFingerprint):
-            self.km.import_peer_key_from_cid('notacid')
+            self.km.import_peer_key(key)
 
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey0)
@@ -110,8 +134,10 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
-    @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
-            new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.pds_save',
+           new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config)
@@ -148,10 +174,13 @@ class TestNonEmptyKeyManager(TestCase):
         self.assertEqual(key, None)
 
 
-@skip
 class TestKeyManagerSubkeyGeneration(TestCase):
     @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
             new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey.pds_save',
+           new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config)
@@ -169,37 +198,6 @@ class TestKeyManagerSubkeyGeneration(TestCase):
 
     @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
             new_callable=MagicMock)
-    def test_generate_local_user_subkey(self, *args):
-        self.km.generate_local_user_subkey()
-        self.km.add_key_message_to_ipfs.assert_called()
-
-    @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
-            new_callable=MagicMock)
     def test_generate_local_node_subkey(self, *args):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
-
-    def test_get_status_with_primary_key_present(self, *args):
-        status = self.km.get_status()
-        self.assertEqual(status, KeyManagerStatus.PRIMARY)
-
-
-@skip
-class TestKeyManagerDBOperations(TestCase):
-    @patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
-    @patch('asyncio.get_event_loop', new_callable=MagicMock)
-    def setUp(self, *args):
-        self.config = PillardConfig()
-        self.km = KeyManager(self.config)
-
-    @patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
-           new_callable=mock_pubkey0)
-    @patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
-           new_callable=MagicMock)
-    def test_import_peer_key_saves_to_database(self, *args):
-        self.km.import_peer_key_from_cid('not_used')
-        self.km.get_key_message_by_cid.assert_called()
-
-    @skip
-    def test_import_peers_keys_from_database(self, *args):
-        self.km.import_peer_keys_from_database()
