@@ -154,7 +154,7 @@ class PillarDaemon:
         self.logger.info("daemon stopped.")
 
     def run(self):
-        self.key_manager = KeyManager(self.config, self.pds)
+        self.key_manager = KeyManager(self.config)
         self.node = Node(self.config)
         self.ipfs_workers = self.get_ipfs_workers(self.config)
         self.logger.info("Starting IPFS workers")
