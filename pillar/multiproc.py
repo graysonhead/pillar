@@ -153,7 +153,8 @@ class PillarWorkerThread(Process):
                     self.loop.stop()
                 break
 
-    def exit(self, timeout: int = 5):
+    def exit(self, *args):
+        self.logger.info("shutting down")
         self.shutdown_callback.set()
 
     def shutdown_routine(self):

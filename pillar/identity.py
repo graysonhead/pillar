@@ -189,5 +189,14 @@ class Node(IdentityWithChannel):
         multiprocessing.Process.__init__(self)
         super().__init__(*args)
 
+    @node_identity_methods.register_method
+    def get_fingerprint_cid(self):
+        return self.fingerprint_cid
+
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
+
+
+class NodeIdentityMixIn(PillarThreadMixIn):
+    queue_thread_class = Node
+    interface_name = "node_identity"
