@@ -169,7 +169,7 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_invalid_pubkey2)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
-            new_callable=MagicMock)
+            noew_callable=MagicMock)
     def test_update_with_invalid_key_raises_exception(self, *args, **kwargs):
         with self.assertRaises(KeyNotVerified):
             self.km.update_peer_key('not_used')
@@ -178,6 +178,17 @@ class TestNonEmptyKeyManager(TestCase):
     def test_load_keytype_no_key(self):
         key = self.km.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.assertEqual(key, None)
+
+    def test_this_key_is_newer(self):
+        keymsg = mock_pubkey2()
+        key, o = pgpy.PGPKey.from_blob(keymsg().message)
+        assert(self.km.this_key_is_newer(key))
+
+    def test_this_key_validated_by_original(self):
+        keymsg = mock_pubkey2()
+        key, o = pgpy.PGPKey.from_blob(keymsg().message)
+        if not self.km.this_key_validated_by_original(key):
+            assert(False)
 
 
 class TestKeyManagerSubkeyGeneration(TestCase):
