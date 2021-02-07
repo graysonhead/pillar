@@ -98,6 +98,8 @@ class TestEmptyKeyManager(TestCase):
 
     @patch('pillar.keymanager.KeyManager.key_already_in_keyring',
            new_callable=FalseyMock)
+    @patch('pillar.keymanager.PillarPGPKey',
+           new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
@@ -134,6 +136,8 @@ class TestNonEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
+    @patch('pillar.keymanager.PillarPGPKey',
+           new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
@@ -177,6 +181,8 @@ class TestNonEmptyKeyManager(TestCase):
 class TestKeyManagerSubkeyGeneration(TestCase):
     @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
             new_callable=MagicMock)
+    @patch('pillar.keymanager.PillarPGPKey',
+           new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
