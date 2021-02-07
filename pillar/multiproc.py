@@ -154,6 +154,9 @@ class PillarWorkerThread(Process):
                 break
 
     def exit(self, *args):
+        # need to wait here for some reason. Emitting a log takes long enough,
+        # alternatively
+        time.sleep(0.1)
         self.logger.info("shutting down")
         self.shutdown_callback.set()
 

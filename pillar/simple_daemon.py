@@ -1,18 +1,13 @@
-from pillar.identity import Node, Primary, NodeIdentityMixIn
+from pillar.identity import Node, Primary
 from pillar.keymanager import KeyManager, PillarKeyType
 from pillar.db import PillarDataStore, PillarDBWorker
 from pillar.IPRPC.cid_messenger import CIDMessenger
 from pillar.ipfs import IPFSWorker
 from pillar.config import Config
-from pillar.multiproc import PillarWorkerThread, PillarThreadMethodsRegister, \
-    PillarThreadMixIn, MixedClass
+from pillar.multiproc import PillarWorkerThread, PillarThreadMethodsRegister
 import multiprocessing
 import signal
 import logging
-
-
-class DaemonInterface(NodeIdentityMixIn, metaclass=MixedClass):
-    pass
 
 
 daemon_methods_register = PillarThreadMethodsRegister()
@@ -31,8 +26,7 @@ class Daemon(PillarWorkerThread):
         self.logger = logging.getLogger("<Daemon>")
         self.config = config
         self.bootstrapping = bootstrap
-        self.interface = DaemonInterface()
-        signal.signal(signal.SIGTERM, self.exit)
+#        signal.signal(signal.SIGTERM, self.exit)
         signal.signal(signal.SIGINT, self.exit)
         multiprocessing.Process.__init__(self)
         super().__init__()
@@ -82,22 +76,3 @@ class Daemon(PillarWorkerThread):
         self.db_worker_instance.exit()
         self.logger.debug("Stopping key manager worker")
         self.key_manager_instance.exit()
-
-    @daemon_methods_register.register_method
-    def node_create_invitation(self, peer_fingerprint_cid: str):
-        return self.interface.node_identity.create_invitation(
-            peer_fingerprint_cid)
-
-    @daemon_methods_register.register_method
-    def node_accept_invitation(self, invitation_cid: str):
-        return self.interface.node_identity.receive_invitation_by_cid(
-            invitation_cid)
-
-    @daemon_methods_register.register_method
-    def get_node_fingerprint_cid(self):
-        return self.interface.node_identity.get_fingerprint_cid()
-
-
-class SimpleDaemonMixIn(PillarThreadMixIn):
-    queue_thread_class = Daemon
-    interface_name = "daemon"
