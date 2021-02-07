@@ -1,11 +1,7 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
-from ..daemon import ProcessManager, \
-    IPFSWorkerManager, \
-    PillarDaemon, \
-    DBWorkerManager
+from ..daemon import ProcessManager, IPFSWorkerManager, PillarDaemon
 from ..config import PillardConfig
-import asynctest
 
 
 class TestProcessManagerBase(TestCase):
@@ -86,7 +82,7 @@ class TestProcessManagerBase(TestCase):
         process.join.assert_called_with(5)
         process.terminate.assert_not_called()
 
-    def test_stop_and_terminate_unresponsive_process(self):
+    def test_stop_unresponsive_process(self):
         process = MagicMock()
         process.shutdown_callback = MagicMock()
         process.is_alive = True
@@ -119,48 +115,21 @@ class TestIPFSWorkerManager(TestCase):
         self.pm.start_all_processes.assert_called()
 
 
-class TestDBWorkerManager(TestCase):
+class TestPillarDaemon(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        self.pm = DBWorkerManager(self.config)
-
-    @patch('pillar.db.PillarDBWorker')
-    def test_create_initial_processes(self, mocked_worker):
-        self.assertEqual(1, len(self.pm.processes))
-
-    @patch('pillar.db.PillarDBWorker')
-    def test_check_processes(self, mocked_worker):
-        self.pm.start_all_processes = MagicMock()
-        self.pm.processes = []
-        self.pm.check_processes()
-        self.assertEqual(1, len(self.pm.processes))
-        self.pm.start_all_processes.assert_called()
-
-
-class TestPillarDaemon(asynctest.TestCase):
-
-    def setUp(self, *args) -> None:
-        self.config = PillardConfig()
         self.daemon = PillarDaemon(self.config)
-        self.daemon.process_managers = []
-        self.daemon.process_managers.append(MagicMock())
+        self.daemon.ipfs_workers = MagicMock()
 
     def test_start_processes(self):
-        self.daemon.start()
-        for pm in self.daemon.process_managers:
-            pm.start_all_processes.assert_called()
+        self.daemon.start(break_immediately=True)
+        self.daemon.ipfs_workers.start_all_processes.assert_called()
 
     def test_stop_processes(self):
         self.daemon.stop()
-        for pm in self.daemon.process_managers:
-            pm.stop_all_processes.assert_called()
+        self.daemon.ipfs_workers.stop_all_processes()
 
     def test_daemon_repr(self):
-        repr_string = self.daemon.__repr__()
-        self.assertEqual("<PillarDaemon>", repr_string)
-
-    def test_housekeeping(self):
-        self.daemon.process_housekeeping()
-        for pm in self.daemon.process_managers:
-            pm.check_processes.assert_called()
+        repr = self.daemon.__repr__()
+        self.assertEqual("<PillarDaemon>", repr)

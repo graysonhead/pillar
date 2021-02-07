@@ -39,10 +39,7 @@ class CLI:
             exit(0)
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
-                self.config,
-                '/tmp/pillar.pid',
-                stdout=sys.stdout,
-                stderr=sys.stderr
+                self.config
             )
             daemon.start()
         elif self.args.sub_command == 'identity':
