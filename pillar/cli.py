@@ -2,16 +2,16 @@ import argparse
 from pillar.config import PillardConfig
 from argparse import Namespace
 import logging
-from pillar.identity import Node
 from pillar.bootstrap import Bootstrapper
 from pillar.daemon import PillarDaemon
-from pillar.keymanager import KeyManager, PillarKeyType
-from pillar.db import PillarDataStore, PillarDBWorker
-from pillar.multiproc import PillarThreadInterface
-from pillar.IPRPC.cid_messenger import CIDMessenger
-from pillar.ipfs import IPFSWorker
+from pillar.multiproc import PillarThreadInterface, MixedClass
+from pillar.simple_daemon import Daemon, SimpleDaemonMixIn
 from pathlib import Path
 import sys
+
+
+class CLIInterface(SimpleDaemonMixIn, metaclass=MixedClass):
+    pass
 
 
 class CLI:
@@ -19,6 +19,7 @@ class CLI:
     def __init__(self, args: list):
         self.logger = logging.getLogger(self.__repr__())
         self.args = self.parse_args(args)
+        self.interface = CLIInterface()
 
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
@@ -33,47 +34,28 @@ class CLI:
             Bootstrapper(self.args)
             exit(0)
         elif self.args.sub_command == 'daemon':
-            daemon = PillarDaemon(
-                self.config,
-                '/tmp/pillar.pid',
-                stdout=sys.stdout,
-                stderr=sys.stderr
-            )
+            daemon = Daemon(self.config)
             daemon.start()
         elif self.args.sub_command == 'identity':
-            key_manager = KeyManager(self.config)
-            key_manager.start()
+            daemon = Daemon(self.config)
+            daemon.start()
 
-            ipfs_worker_instance = IPFSWorker(str(self))
-            ipfs_worker_instance.start()
-            cid_messenger_instance = CIDMessenger(
-                PillarKeyType.NODE_SUBKEY,
-                self.config)
-            cid_messenger_instance.start()
-            db_worker_instance = PillarDBWorker(self.config)
-            db_worker_instance.start()
-
-            pds = PillarDataStore(self.config)
-            node = Node.get_local_instance(self.config, pds)
-            node.start()
             if self.args.identity_command == 'create_invitation':
-                print(node.create_invitation(self.args.peer_fingerprint_cid))
+                print(self.interface.daemon.node_create_invitation(
+                    self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
-                print(node.fingerprint_cid)
-                node.exit()
+                print(self.interface.daemon.get_node_fingerprint_cid())
             elif self.args.identity_command == 'accept_invitation':
-                node.receive_invitation_by_cid(self.args.invitation_cid)
+                self.interface.daemon.node_accept_invitation(
+                    self.args.invitation_cid)
             elif self.args.identity_command == 'show_fingerprints':
                 print("Local Fingerprints:")
                 print(f"Node: {node.fingerprint}")
                 print(f"Peers: {self.key_manager.keyring.fingerprints()}")
+            daemon.exit()
         else:
             print("No subcommand provided")
             sys.exit(1)
-        key_manager.exit()
-        db_worker_instance.exit()
-        cid_messenger_instance.exit()
-        ipfs_worker_instance.exit()
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()
