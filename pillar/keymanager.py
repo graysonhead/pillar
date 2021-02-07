@@ -34,7 +34,8 @@ class KeyManagerStatus(Enum):
 
 
 class KeyOptions:
-    usage = {KeyFlags.Sign,
+    usage = {KeyFlags.Certify,
+             KeyFlags.Sign,
              KeyFlags.EncryptCommunications,
              KeyFlags.EncryptStorage}
     hashes = [HashAlgorithm.SHA256, HashAlgorithm.SHA384,
@@ -313,13 +314,26 @@ class KeyManager(PillarWorkerThread):
         process using the user primary key.
         """
         self.node_uuid = str(uuid4())
-        key = self.get_new_keypair()
+
+        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
         uid = pgpy.PGPUID.new(
             self.node_uuid,
             comment=PillarKeyType.NODE_SUBKEY.value,
             email=self.user_primary_key.pubkey.userids[0].email)
 
-        key.add_uid(uid,
+        self.user_primary_key.add_uid(
+            uid,
+            selfsign=True,
+            usage=KeyOptions.usage,
+            hashes=KeyOptions.hashes,
+            ciphers=KeyOptions.ciphers,
+            compression=KeyOptions.compression)
+
+        for u in self.user_primary_key.pubkey.userids:
+            if u.name == self.node_uuid:
+                key.add_uid(
+                    u,
+                    selfsign=True,
                     usage=KeyOptions.usage,
                     hashes=KeyOptions.hashes,
                     ciphers=KeyOptions.ciphers,
@@ -331,21 +345,14 @@ class KeyManager(PillarWorkerThread):
         self.user_primary_key.add_subkey(
             key,
             usage=KeyOptions.usage)
+
         self.user_primary_key._signatures.pop()
         self.user_primary_key |= \
             self.user_primary_key.certify(self.user_primary_key)
+
         cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.set_user_primary_key_cid(cid)
         self.node_subkey = key
-
-    def get_new_keypair(self) -> pgpy.PGPKey:
-        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-        key.add_uid(self.user_primary_key.pubkey.userids[0],
-                    usage=KeyOptions.usage,
-                    hashes=KeyOptions.hashes,
-                    ciphers=KeyOptions.ciphers,
-                    compression=KeyOptions.compression)
-        return key
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
@@ -488,7 +495,7 @@ class EncryptionHelper:
 
         message = pgpy.PGPMessage.new(message)
         message |= self.local_key.sign(message)
-        self.logger.info(f'Encrypted message for {peer_subkey.fingerprint}')
+        self.logger.info(f'Encrypting message for {peer_subkey.fingerprint}')
         return peer_subkey.encrypt(message)
 
     def decrypt_and_verify_encrypted_message(self,
