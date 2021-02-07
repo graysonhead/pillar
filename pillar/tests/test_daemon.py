@@ -82,7 +82,7 @@ class TestProcessManagerBase(TestCase):
         process.join.assert_called_with(5)
         process.terminate.assert_not_called()
 
-    def test_stop_unresponsive_process(self):
+    def test_stop_and_terminate_unresponsive_process(self):
         process = MagicMock()
         process.shutdown_callback = MagicMock()
         process.is_alive = True
