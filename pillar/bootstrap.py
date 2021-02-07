@@ -1,11 +1,8 @@
 from argparse import Namespace
 from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
-from pillar.IPRPC.cid_messenger import CIDMessenger
-from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn,\
-    PillarKeyType
-from pillar.identity import PrimaryIdentityMixIn, Primary
-from pillar.ipfs import IPFSWorker
+from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
+from pillar.identity import PrimaryIdentityMixIn
 from pillar.multiproc import MixedClass
 from pillar.simple_daemon import Daemon
 from pathlib import Path

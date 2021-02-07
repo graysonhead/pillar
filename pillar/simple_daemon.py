@@ -54,13 +54,15 @@ class Daemon(PillarWorkerThread):
         self.logger.debug("Starting db worker")
         self.db_worker_instance.start()
 
-        if self.key_manager_instance.node_subkey is not None and not self.bootstrapping:
+        if self.key_manager_instance.node_subkey is not None and \
+           not self.bootstrapping:
             self.pds = PillarDataStore(self.config)
             self.node = Node.get_local_instance(self.config, self.pds)
 
             self.logger.debug("Starting node")
             self.node.start()
-        if self.key_manager_instance.user_primary_key is not None or self.bootstrapping:
+        if self.key_manager_instance.user_primary_key is not None or \
+           self.bootstrapping:
             self.primary_worker = Primary(self.config)
             self.logger.debug("Starting user primary worker")
             self.primary_worker.start()
@@ -83,11 +85,13 @@ class Daemon(PillarWorkerThread):
 
     @daemon_methods_register.register_method
     def node_create_invitation(self, peer_fingerprint_cid: str):
-        return self.interface.node_identity.create_invitation(peer_fingerprint_cid)
+        return self.interface.node_identity.create_invitation(
+            peer_fingerprint_cid)
 
     @daemon_methods_register.register_method
     def node_accept_invitation(self, invitation_cid: str):
-        return self.interface.node_identity.receive_invitation_by_cid(invitation_cid)
+        return self.interface.node_identity.receive_invitation_by_cid(
+            invitation_cid)
 
     @daemon_methods_register.register_method
     def get_node_fingerprint_cid(self):
