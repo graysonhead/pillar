@@ -1,7 +1,11 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
-from ..daemon import ProcessManager, IPFSWorkerManager, PillarDaemon
+from ..daemon import ProcessManager, \
+    IPFSWorkerManager, \
+    PillarDaemon, \
+    DBWorkerManager
 from ..config import PillardConfig
+import asynctest
 
 
 class TestProcessManagerBase(TestCase):
@@ -102,7 +106,7 @@ class TestIPFSWorkerManager(TestCase):
 
     @patch('pillar.ipfs.IPFSWorker')
     def test_create_initial_processes(self, mocked_worker):
-        self.assertEqual(self.config.get_value('ipfs_workers'),
+        self.assertEqual(self.config.get_value('ipfs_worker_manager'),
                          len(self.pm.processes))
 
     @patch('pillar.ipfs.IPFSWorker')
@@ -110,26 +114,53 @@ class TestIPFSWorkerManager(TestCase):
         self.pm.start_all_processes = MagicMock()
         self.pm.processes = []
         self.pm.check_processes()
-        self.assertEqual(self.config.get_value('ipfs_workers'),
+        self.assertEqual(self.config.get_value('ipfs_worker_manager'),
                          len(self.pm.processes))
         self.pm.start_all_processes.assert_called()
 
 
-class TestPillarDaemon(TestCase):
+class TestDBWorkerManager(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
+        self.pm = DBWorkerManager(self.config)
+
+    @patch('pillar.db.PillarDBWorker')
+    def test_create_initial_processes(self, mocked_worker):
+        self.assertEqual(1, len(self.pm.processes))
+
+    @patch('pillar.db.PillarDBWorker')
+    def test_check_processes(self, mocked_worker):
+        self.pm.start_all_processes = MagicMock()
+        self.pm.processes = []
+        self.pm.check_processes()
+        self.assertEqual(1, len(self.pm.processes))
+        self.pm.start_all_processes.assert_called()
+
+
+class TestPillarDaemon(asynctest.TestCase):
+
+    def setUp(self, *args) -> None:
+        self.config = PillardConfig()
         self.daemon = PillarDaemon(self.config)
-        self.daemon.ipfs_workers = MagicMock()
+        self.daemon.process_managers = []
+        self.daemon.process_managers.append(MagicMock())
 
     def test_start_processes(self):
-        self.daemon.start(break_immediately=True)
-        self.daemon.ipfs_workers.start_all_processes.assert_called()
+        self.daemon.start()
+        for pm in self.daemon.process_managers:
+            pm.start_all_processes.assert_called()
 
     def test_stop_processes(self):
         self.daemon.stop()
-        self.daemon.ipfs_workers.stop_all_processes()
+        for pm in self.daemon.process_managers:
+            pm.stop_all_processes.assert_called()
 
     def test_daemon_repr(self):
-        repr = self.daemon.__repr__()
-        self.assertEqual("<PillarDaemon>", repr)
+        repr_string = self.daemon.__repr__()
+        self.assertEqual("<PillarDaemon>", repr_string)
+
+    async def test_housekeeping(self):
+        await self.daemon.process_housekeeping()
+        for pm in self.daemon.process_managers:
+            pm.check_processes.assert_called()

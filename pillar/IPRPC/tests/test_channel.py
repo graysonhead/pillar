@@ -220,12 +220,6 @@ class TestIPRPCChannel(asynctest.TestCase):
         self.assertEqual(Connection, type(tx))
         self.assertEqual(Connection, type(rx))
 
-    async def test_handler_loop(self):
-        self.channel.fake_method = asynctest.CoroutineMock()
-        await self.channel._handler_loop(self.channel.fake_method,
-                                         run_once=True)
-        self.channel.fake_method.assert_awaited()
-
     async def test_handle_tx_queue_messages(self):
         test_message = TestMessage()
         self.channel.status = PeeringStatus.ESTABLISHED

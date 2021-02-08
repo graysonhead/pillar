@@ -10,6 +10,7 @@ from .messages import IPRPCMessage,\
 from ..encryption_helper import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
+from ..async_untils import handler_loop
 import time
 import pgpy
 import hashlib
@@ -124,46 +125,46 @@ class IPRPCChannel(Process):
             self.keepalive_send_timeout = time.time() + \
                 self.keepalive_send_interval
             rx_workers = []
-            asyncio.ensure_future(self._handler_loop(
+            asyncio.ensure_future(handler_loop(
                 self._handle_establish_connection, sleep=5)
             )
             rx_workers.append(asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_messages_current_window,
                     sleep=.01
                 )
             ))
             rx_workers.append(asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_messages_previous_window,
                     sleep=.01
                 )
             ))
             rx_workers.append(asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_messages_next_window,
                     sleep=.01
                 )
             ))
             asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_tx_queue_messages,
                     sleep=.01
                 )
             )
             asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_keepalive,
                     sleep=5,
                 )
             )
             asyncio.ensure_future(
-                self._handler_loop(
+                handler_loop(
                     self._handle_timeout,
                     sleep=5,
                 )
             )
-            asyncio.ensure_future(self._handler_loop(
+            asyncio.ensure_future(handler_loop(
                 self._async_rotate_queues_wrapper,
                 sleep=5
             ))
@@ -187,27 +188,6 @@ class IPRPCChannel(Process):
         if not self.status == PeeringStatus.ESTABLISHED:
             self._change_peering_status(PeeringStatus.ESTABLISHING)
             await self._send_message(PeeringHello(initiator_id=self.id))
-
-    async def _handler_loop(self,
-                            handler,
-                            sleep=0,
-                            run_once: bool = False) -> None:
-        """
-        Used to implement looping logic to non-looping handlers.
-
-        This method mostly exists to make unit testing easier.
-        :param handler:
-            The async method to run
-        :param sleep:
-            Time to asyncio.sleep between each loop.
-        :param run_once:
-            Run once then break the loop.
-        """
-        while True:
-            await handler()
-            await asyncio.sleep(sleep)
-            if run_once:
-                break
 
     async def _handle_tx_queue_messages(self) -> None:
         """
