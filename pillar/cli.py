@@ -42,6 +42,7 @@ class CLI:
                 self.config
             )
             daemon.start()
+            daemon.start_housekeeping()
         elif self.args.sub_command == 'identity':
 
             key_manager = KeyManager(self.config)
