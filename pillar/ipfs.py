@@ -62,7 +62,6 @@ class IPFSWorker(PillarWorkerThread):
         super().__init__()
         self.ipfs_client = ipfs_client or IPFSClient()
         self.logger = logging.getLogger(self.__repr__())
-        self.logger.info(f"Spawned IPFS Worker {str(self)}")
 
     @ipfs_worker_register.register_method
     async def get_file(self, cid: str, dstdir='.') -> None:
