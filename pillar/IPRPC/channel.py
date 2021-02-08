@@ -7,7 +7,7 @@ from .messages import IPRPCMessage,\
     PeeringHelloResponse, \
     IPRPCRegistry, \
     PeeringKeepalive
-from ..encryption_helper import EncryptionHelper
+from ..keymanager import EncryptionHelper
 from ..ipfs import IPFSClient
 from multiprocessing import Process, Pipe
 from ..async_untils import handler_loop
@@ -300,10 +300,10 @@ class IPRPCChannel(Process):
         message = call.serialize_to_json()
         if self.encryption_helper:
             message = self.encryption_helper.\
-                    sign_and_encrypt_string_to_peer_fingerprint(
-                        message,
-                        self.peer_id
-                    )
+                sign_and_encrypt_string_to_peer_fingerprint(
+                    message,
+                    self.peer_id
+                )
         await self._send_ipfs(message)
         self.logger.info(f"Sent message: {call}")
 
@@ -356,12 +356,12 @@ class ChannelManager:
         self.logger.info(f'Adding peer: {public_key.fingerprint}')
         for fingerprint, subkey in public_key.subkeys.items():
             channel = IPRPCChannel(
-                    str(self.local_fingerprint),
-                    str(subkey.fingerprint),
-                    encryption_helper=self.encryption_helper)
+                str(self.local_fingerprint),
+                str(subkey.fingerprint),
+                encryption_helper=self.encryption_helper)
             self.channels.append(channel)
             self.pipes.update({str(fingerprint):
-                              channel.get_pipe_endpoints()})
+                               channel.get_pipe_endpoints()})
 
     def start_channels(self):
         for channel in self.channels:
