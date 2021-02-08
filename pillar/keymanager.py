@@ -421,32 +421,6 @@ class KeyManager(PillarWorkerThread):
         self.node.bootstrap(name, email)
 
 
-class QueueCommand:
-    def __init__(self, command_name: str, *args, **kwargs):
-        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
-        self.command_name = command_name
-        self.args = args
-        self.kwargs = kwargs
-        self.id = uuid4()
-
-    def __dict__(self):
-        return {"id": self.id,
-                "command_name": self.command_name,
-                "args": self.args,
-                "kwargs": self.kwargs}
-
-
-class KeyManagerCommandCallable:
-
-    def __init__(self, command: str, parent_instance):
-        self.command = command
-        self.parent_instance = parent_instance
-
-    def __call__(self, *args, **kwargs):
-        return self.parent_instance.key_manager_command(self.command,
-                                                        *args, **kwargs)
-
-
 class KeyManagerCommandQueueMixIn(PillarThreadMixIn):
     queue_thread_class = KeyManager
     interface_name = "key_manager"
