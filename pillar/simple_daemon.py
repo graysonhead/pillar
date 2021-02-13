@@ -36,7 +36,7 @@ class Daemon(PillarWorkerThread):
         self.logger.debug("Starting key manager")
         self.key_manager_instance.start()
 
-        self.ipfs_worker_instance = IPFSWorker(str(self))
+        self.ipfs_worker_instance = IPFSWorker()
         self.logger.debug("Starting ipfs worker")
         self.ipfs_worker_instance.start()
         self.cid_messenger_instance = CIDMessenger(
