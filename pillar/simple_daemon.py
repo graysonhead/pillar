@@ -32,7 +32,19 @@ class Daemon(PillarWorkerThread):
         super().__init__()
 
     def pre_run(self):
-        self.key_manager_instance = KeyManager(self.config)
+        self.db_worker_instance = PillarDBWorker(self.config)
+        self.logger.debug("Starting db worker")
+        self.db_worker_instance.start()
+
+        self.pds = PillarDataStore(self.config)
+
+        if self.bootstrapping:
+            self.key_manager_instance = KeyManager(self.config)
+        else:
+            self.key_manager_instance = KeyManager.get_local_instance(
+                self.config, self.pds)
+
+        print(self.key_manager_instance)
         self.logger.debug("Starting key manager")
         self.key_manager_instance.start()
 
@@ -44,13 +56,9 @@ class Daemon(PillarWorkerThread):
             self.config)
         self.logger.debug("Starting cid messenger worker")
         self.cid_messenger_instance.start()
-        self.db_worker_instance = PillarDBWorker(self.config)
-        self.logger.debug("Starting db worker")
-        self.db_worker_instance.start()
 
         if self.key_manager_instance.node_subkey is not None and \
            not self.bootstrapping:
-            self.pds = PillarDataStore(self.config)
             self.node = Node.get_local_instance(self.config, self.pds)
 
             self.logger.debug("Starting node")

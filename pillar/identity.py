@@ -195,7 +195,7 @@ class Node(IdentityWithChannel):
 
     @node_identity_methods.register_method
     def create_invitation(self, *args):
-        super().create_invitation(*args)
+        return super().create_invitation(*args)
 
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"

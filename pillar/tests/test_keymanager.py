@@ -103,8 +103,6 @@ class TestEmptyKeyManager(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
            new_callable=MagicMock)
-    @patch('pillar.keymanager.PillarPGPKey.pds_save',
-           new_callable=MagicMock)
     def test_import_peer_key(self, *args):
 
         keyfunction = mock_pubkey0()
@@ -140,8 +138,6 @@ class TestNonEmptyKeyManager(TestCase):
     @patch('pillar.keymanager.PillarPGPKey',
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.load_pgpy_key',
-           new_callable=MagicMock)
-    @patch('pillar.keymanager.PillarPGPKey.pds_save',
            new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
@@ -179,10 +175,10 @@ class TestNonEmptyKeyManager(TestCase):
         key = self.km.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.assertEqual(key, None)
 
-    def test_this_key_is_newer(self):
+    def test_this_key_is_newer_or_equal(self):
         keymsg = mock_pubkey2()
         key, o = pgpy.PGPKey.from_blob(keymsg().message)
-        assert(self.km.this_key_is_newer(key))
+        assert(self.km.this_key_is_newer_or_equal(key))
 
     def test_this_key_validated_by_original(self):
         keymsg = mock_pubkey2()
@@ -200,6 +196,8 @@ class TestKeyManagerSubkeyGeneration(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
            new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.pds_save',
+           new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config)
@@ -215,8 +213,10 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.km.exit()
         self.km.join()
 
-    @ patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
-            new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.pds_save',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+           new_callable=MagicMock)
     def test_generate_local_node_subkey(self, *args):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()

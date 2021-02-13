@@ -7,7 +7,8 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDBWorker, PillarDBObject, Key
+from .db import PillarDBWorker, PillarDBObject, Key, KeyManagerData,\
+    PillarDataStore
 from .interfaces import PillarInterfaces
 from .multiproc import PillarWorkerThread, \
     PillarThreadMethodsRegister,\
@@ -80,12 +81,14 @@ class PillarPGPKey(PillarDBObject):
         return ret
 
 
-class KeyManager(PillarWorkerThread):
+class KeyManager(PillarDBObject,
+                 PillarWorkerThread):
     """
     Keymanager creates and manages the keys needed to operate a
     pillar instance and decrypt messages from peers and maintains
     the keyring used to validate and encrypt messages to peers.
     """
+    model = KeyManagerData
     command_queue = multiprocessing.Queue()
     output_queue = multiprocessing.Queue()
     shutdown_callback = multiprocessing.Event()
@@ -105,11 +108,17 @@ class KeyManager(PillarWorkerThread):
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
-        self.node_uuid = None
+        if not hasattr(self, "node_uuid"):
+            self.node_uuid = str(uuid4())
 
         self.queue_thread_class = self.__class__
         self.interfaces = PillarInterfaces()
+        PillarWorkerThread.__init__(self)
         super().__init__()
+
+    @classmethod
+    def get_local_instance(cls, config: PillardConfig, pds: PillarDataStore):
+        return cls.load_all_from_db([config])[0]
 
     def pre_run(self):
         self.db_worker_instance = PillarDBWorker(self.config)
@@ -176,7 +185,7 @@ class KeyManager(PillarWorkerThread):
             raise KeyNotInKeyring
         self.logger.info(
             f"Updating peer key: {new_key.fingerprint}")
-        if not self.this_key_is_newer(new_key):
+        if not self.this_key_is_newer_or_equal(new_key):
             raise WontUpdateToStaleKey
         if not self.this_key_validated_by_original(new_key):
             raise KeyNotVerified
@@ -194,14 +203,14 @@ class KeyManager(PillarWorkerThread):
             self.logger.debug("Key not found.")
             return False
 
-    def this_key_is_newer(self, key: pgpy.PGPKey) -> bool:
+    def this_key_is_newer_or_equal(self, key: pgpy.PGPKey) -> bool:
         with self.keyring.key(key.fingerprint) as original_key:
             original_sig = self.get_value_and_requeue(
                 original_key._signatures)
             new_sig = self.get_value_and_requeue(key._signatures)
             self.logger.info(f'comparing new key time: {new_sig.created}'
                              f' to old key time: {original_sig.created}')
-            if original_sig.created < new_sig.created:
+            if original_sig.created <= new_sig.created:
                 return True
             else:
                 return False
@@ -282,6 +291,7 @@ class KeyManager(PillarWorkerThread):
 
     def set_user_primary_key_cid(self, cid):
         self.user_primary_key_cid = cid
+        self.pds_save()
 
     def generate_registration_primary_key(self):
         uid = pgpy.PGPUID.new(
@@ -313,6 +323,7 @@ class KeyManager(PillarWorkerThread):
         process using the user primary key.
         """
         self.node_uuid = str(uuid4())
+        self.pds_save()
 
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
         uid = pgpy.PGPUID.new(

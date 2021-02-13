@@ -63,6 +63,12 @@ class Invitation(Base):
     key = relationship("Key", uselist=False, back_populates='invitation')
 
 
+class KeyManagerData(Base):
+    __tablename__ = 'key_manager'
+    node_uuid = Column(String, primary_key=True)
+    user_primary_key_cid = Column(String)
+
+
 class PillarDB:
     """
     This class generates new sessions with the get_session() method
