@@ -193,6 +193,10 @@ class Node(IdentityWithChannel):
     def get_fingerprint_cid(self):
         return self.fingerprint_cid
 
+    @node_identity_methods.register_method
+    def create_invitation(self, *args):
+        super().create_invitation(*args)
+
     def __repr__(self):
         return f"<Node: {self.fingerprint}>"
 
