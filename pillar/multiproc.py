@@ -225,7 +225,8 @@ class PillarThreadInterface:
             try:
                 output = output_queue.get_nowait()
                 for id, output in output.items():
-                    if type(output) is Exception:
+                    if issubclass(type(output), Exception):
+                        print(output)
                         raise output
                     if id == uuid:
                         self.logger.debug(
