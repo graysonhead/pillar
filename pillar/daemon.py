@@ -66,12 +66,12 @@ class IPFSWorkerManager(ProcessManager):
         return IPFSWorker(ipfs_client=ipfs_client)
 
     def initialize_processes(self):
-        for i in range(self.config.get_value('ipfs_worker_manager')):
+        for i in range(self.config.get_value('ipfs_workers')):
             self.processes.append(self.get_new_process())
 
     def check_processes(self):
         number_of_processes = len(self.processes)
-        desired_processes = self.config.get_value('ipfs_worker_manager')
+        desired_processes = self.config.get_value('ipfs_workers')
         if number_of_processes < desired_processes:
             missing_processes = desired_processes - number_of_processes
             for i in range(missing_processes):
