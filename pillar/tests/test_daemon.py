@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, patch
 from ..daemon import ProcessManager, \
     IPFSWorkerManager, \
     PillarDaemon, \
-    DBWorkerManager
+    DBWorkerManager, \
+    NodeWorkerManager
 from ..config import PillardConfig
 import asynctest
 
@@ -136,6 +137,20 @@ class TestDBWorkerManager(TestCase):
         self.pm.check_processes()
         self.assertEqual(1, len(self.pm.processes))
         self.pm.start_all_processes.assert_called()
+
+
+class TestNodeWorkerManager(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        self.config = PillardConfig()
+        self.pm = NodeWorkerManager(self.config)
+
+    @patch('pillar.identity.Node')
+    def test_check_process_re_initialize_when_empty_processes(self, mocked_worker):
+        self.pm.processes = []
+        self.pm.initialize_processes = MagicMock()
+        self.pm.check_processes()
+        self.pm.initialize_processes.assert_called()
 
 
 class TestPillarDaemon(asynctest.TestCase):

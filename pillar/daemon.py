@@ -1,6 +1,7 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
+from .identity import Node
 import logging
 import multiprocessing
 import signal
@@ -97,17 +98,32 @@ class DBWorkerManager(ProcessManager):
             self.start_all_processes()
 
 
+class NodeWorkerManager(ProcessManager):
+
+    def __init__(self, config: PillardConfig):
+        self.config = config
+        super().__init__()
+
+    def initialize_processes(self):
+        self.processes.append(Node(self.config))
+
+    def check_processes(self):
+        if not self.processes:
+            self.initialize_processes()
+
+
 class PillarDaemon:
 
     def __init__(self,
                  config: PillardConfig):
+        self.stop_signal = multiprocessing.Event()
         self.logger = logging.getLogger(self.__repr__())
         self.config = config
         self.process_managers = []
         self.process_managers.append(IPFSWorkerManager(self.config))
         self.process_managers.append(DBWorkerManager(self.config))
+        self.process_managers.append(NodeWorkerManager(self.config))
         signal.signal(signal.SIGINT, self.stop)
-        self.stop_signal = multiprocessing.Event()
 
     def start(self):
         for manager in self.process_managers:
