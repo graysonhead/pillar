@@ -1,10 +1,10 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
-from .async_untils import handler_loop
 import logging
 import multiprocessing
-import asyncio
+import signal
+import time
 
 
 class ProcessManager:
@@ -32,10 +32,10 @@ class ProcessManager:
         for process in self.processes:
             self.logger.info(f"Sending shutdown event to {process}")
             process.shutdown_callback.set()
-        for process in self.processes:
-            process.join(join_timeout)
-            if process.exitcode is None:
-                process.terminate()
+            for process in self.processes:
+                process.join(join_timeout)
+                if process.exitcode is None:
+                    process.terminate()
 
     def prune_dead_processes(self):
         processes_to_remove = []
@@ -106,39 +106,30 @@ class PillarDaemon:
         self.process_managers = []
         self.process_managers.append(IPFSWorkerManager(self.config))
         self.process_managers.append(DBWorkerManager(self.config))
-        self.loop = asyncio.get_event_loop()
+        signal.signal(signal.SIGINT, self.stop)
+        self.stop_signal = multiprocessing.Event()
 
     def start(self):
         for manager in self.process_managers:
             manager.start_all_processes()
 
-    def start_housekeeping(self, run_once=False):
-        tasks = asyncio.gather(
-            handler_loop(
-                self.process_housekeeping,
-                sleep=5,
-                run_once=run_once
-            )
-        )
-        try:
-            self.loop.run_until_complete(tasks)
-        except KeyboardInterrupt:
-            print("Caught keyboard interrupt, Shutting down.")
-            self.stop()
-            tasks.cancel()
-            self.loop.run_forever()
-            tasks.exception()
-        finally:
-            self.loop.close()
+    def start_housekeeping(self):
+        while not self.stop_signal.is_set():
+            self.process_housekeeping()
+            if self.stop_signal.is_set():
+                break
+            time.sleep(1)
 
-    async def process_housekeeping(self):
-        self.logger.info("Process housekeeping ran")
+    def process_housekeeping(self):
         for manager in self.process_managers:
             manager.check_processes()
 
-    def stop(self):
-        for manager in self.process_managers:
-            manager.stop_all_processes()
+    def stop(self, *args):
+        if not self.stop_signal.is_set():
+            print("Caught keyboard interrupt, Shutting down.")
+            self.stop_signal.set()
+            for manager in self.process_managers:
+                manager.stop_all_processes()
 
     def __del__(self):
         self.stop()

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 import inspect
+import signal
 from uuid import uuid4
 
 
@@ -131,6 +132,7 @@ class PillarWorkerThread(Process):
         This runs the worker loop, and is called in a subprocess by the
         self.start() method
         """
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.pre_run()
         self.loop = asyncio.get_event_loop()
         asyncio.ensure_future(self.run_queue_commands())
