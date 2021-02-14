@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 import inspect
+import signal
 import traceback
 from uuid import uuid4
 
@@ -153,11 +154,7 @@ class PillarWorkerThread(Process):
                     self.loop.stop()
                 break
 
-    def exit(self, *args):
-        # need to wait here for some reason. Emitting a log takes long enough,
-        # alternatively
-        time.sleep(0.1)
-        self.logger.info("shutting down")
+    def exit(self, timeout: int = 5):
         self.shutdown_callback.set()
 
     def shutdown_routine(self):
@@ -174,6 +171,7 @@ class PillarWorkerThread(Process):
         This runs the worker loop, and is called in a subprocess by the
         self.start() method
         """
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.pre_run()
         self.loop = asyncio.get_event_loop()
         asyncio.ensure_future(self.run_queue_commands())

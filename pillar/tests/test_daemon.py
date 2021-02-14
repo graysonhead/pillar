@@ -106,7 +106,7 @@ class TestIPFSWorkerManager(TestCase):
 
     @patch('pillar.ipfs.IPFSWorker')
     def test_create_initial_processes(self, mocked_worker):
-        self.assertEqual(self.config.get_value('ipfs_worker_manager'),
+        self.assertEqual(self.config.get_value('ipfs_workers'),
                          len(self.pm.processes))
 
     @patch('pillar.ipfs.IPFSWorker')
@@ -114,7 +114,7 @@ class TestIPFSWorkerManager(TestCase):
         self.pm.start_all_processes = MagicMock()
         self.pm.processes = []
         self.pm.check_processes()
-        self.assertEqual(self.config.get_value('ipfs_worker_manager'),
+        self.assertEqual(self.config.get_value('ipfs_workers'),
                          len(self.pm.processes))
         self.pm.start_all_processes.assert_called()
 
@@ -160,7 +160,7 @@ class TestPillarDaemon(asynctest.TestCase):
         repr_string = self.daemon.__repr__()
         self.assertEqual("<PillarDaemon>", repr_string)
 
-    async def test_housekeeping(self):
-        await self.daemon.process_housekeeping()
+    def test_housekeeping(self):
+        self.daemon.process_housekeeping()
         for pm in self.daemon.process_managers:
             pm.check_processes.assert_called()
