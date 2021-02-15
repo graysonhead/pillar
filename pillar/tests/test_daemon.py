@@ -146,7 +146,8 @@ class TestNodeWorkerManager(asynctest.TestCase):
         self.pm = NodeWorkerManager(self.config)
 
     @patch('pillar.identity.Node')
-    def test_check_process_re_initialize_when_empty_processes(self, mocked_worker):
+    def test_check_process_re_initialize_when_empty_processes(self,
+                                                              mocked_worker):
         self.pm.processes = []
         self.pm.initialize_processes = MagicMock()
         self.pm.check_processes()

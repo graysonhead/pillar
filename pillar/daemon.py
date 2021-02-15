@@ -135,7 +135,9 @@ class CidMessengerWorkerManager(ProcessManager):
         super().__init__()
 
     def initialize_processes(self):
-        self.processes.append(CIDMessenger(PillarKeyType.NODE_SUBKEY, self.config))
+        self.processes.append(
+            CIDMessenger(PillarKeyType.NODE_SUBKEY, self.config)
+        )
 
     def check_processes(self):
         if not self.processes:
