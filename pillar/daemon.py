@@ -2,6 +2,8 @@ from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
 from .identity import Node
+from .keymanager import KeyManager, PillarKeyType
+from .IPRPC.cid_messenger import CIDMessenger
 import logging
 import multiprocessing
 import signal
@@ -112,6 +114,34 @@ class NodeWorkerManager(ProcessManager):
             self.initialize_processes()
 
 
+class KeyManagerWorkerManager(ProcessManager):
+
+    def __init__(self, config: PillardConfig):
+        self.config = config
+        super().__init__()
+
+    def initialize_processes(self):
+        self.processes.append(KeyManager(self.config))
+
+    def check_processes(self):
+        if not self.processes:
+            self.initialize_processes()
+
+
+class CidMessengerWorkerManager(ProcessManager):
+
+    def __init__(self, config: PillardConfig):
+        self.config = config
+        super().__init__()
+
+    def initialize_processes(self):
+        self.processes.append(CIDMessenger(PillarKeyType.NODE_SUBKEY, self.config))
+
+    def check_processes(self):
+        if not self.processes:
+            self.initialize_processes()
+
+
 class PillarDaemon:
 
     def __init__(self,
@@ -121,7 +151,9 @@ class PillarDaemon:
         self.config = config
         self.process_managers = []
         self.process_managers.append(IPFSWorkerManager(self.config))
+        self.process_managers.append(CidMessengerWorkerManager(self.config))
         self.process_managers.append(DBWorkerManager(self.config))
+        self.process_managers.append(KeyManagerWorkerManager(self.config))
         self.process_managers.append(NodeWorkerManager(self.config))
         signal.signal(signal.SIGINT, self.stop)
 
@@ -142,7 +174,6 @@ class PillarDaemon:
 
     def stop(self, *args):
         if not self.stop_signal.is_set():
-            print("Caught keyboard interrupt, Shutting down.")
             self.stop_signal.set()
             for manager in self.process_managers:
                 manager.stop_all_processes()

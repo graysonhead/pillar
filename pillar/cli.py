@@ -3,12 +3,8 @@ from argparse import Namespace
 import logging
 from pillar.identity import NodeIdentityMixIn
 from pillar.bootstrap import Bootstrapper
+from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.daemon import PillarDaemon
-from pillar.keymanager import KeyManager, PillarKeyType
-from pillar.db import PillarDataStore, PillarDBWorker
-from pillar.multiproc import PillarThreadInterface
-from pillar.IPRPC.cid_messenger import CIDMessenger
-from pillar.ipfs import IPFSWorker
 from pathlib import Path
 import sys
 import argparse
@@ -44,6 +40,8 @@ class CLI:
             daemon.start()
             daemon.start_housekeeping()
         elif self.args.sub_command == 'identity':
+            daemon = PillarDaemon(self.config)
+            daemon.start()
 
             key_manager = KeyManager(self.config)
             key_manager.start()
@@ -68,7 +66,7 @@ class CLI:
             elif self.args.identity_command == 'accept_invitation':
                 self.interface.node_identity.receive_invitation_by_cid(
                     self.args.invitation_cid)
-            daemon.exit()
+            daemon.stop()
         else:
             print("No subcommand provided")
             sys.exit(1)
