@@ -184,7 +184,7 @@ class PillardConfig(Config):
                         " generator."
         ),
         ConfigOption(
-            'ipfs_worker_manager',
+            'ipfs_workers',
             [int],
             default_value=2,
             description="Number of IPFS worker threads to run."
