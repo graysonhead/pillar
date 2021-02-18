@@ -1,6 +1,6 @@
 from .multiproc import PillarWorkerThread, PillarThreadMixIn, \
     PillarThreadMethodsRegister, MixedClass
-from .db import PillarDBObject, PillarDataStore, NodeIdentity, \
+from .db import PillarDBObject, NodeIdentity, \
     PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
@@ -101,7 +101,7 @@ class LocalIdentity(PillarDBObject,
             self.channel_manager.add_peer(key)
 
     @classmethod
-    def get_local_instance(cls, config: PillardConfig, pds: PillarDataStore):
+    def get_local_instance(cls, config: PillardConfig):
         return cls.load_all_from_db([config])[0]
 
 
