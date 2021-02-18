@@ -7,8 +7,7 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDataStore, PillarDBWorker, PillarDBObject, Key
-
+from .db import PillarDBWorker, PillarDBObject, Key, KeyManagerData
 from .interfaces import PillarInterfaces
 from .multiproc import PillarWorkerThread, PillarThreadInterface, \
     PillarThreadMethodsRegister,\
@@ -117,7 +116,7 @@ class KeyManager(PillarDBObject,
         super().__init__()
 
     @classmethod
-    def get_local_instance(cls, config: PillardConfig, pds: PillarDataStore):
+    def get_local_instance(cls, config: PillardConfig):
         return cls.load_all_from_db([config])[0]
 
     def pre_run(self):
