@@ -107,7 +107,9 @@ class NodeWorkerManager(ProcessManager):
         super().__init__()
 
     def initialize_processes(self):
-        self.processes.append(Node(self.config))
+        self.processes.append(
+            Node.get_local_instance(self.config)
+        )
 
     def check_processes(self):
         if not self.processes:
@@ -116,12 +118,17 @@ class NodeWorkerManager(ProcessManager):
 
 class KeyManagerWorkerManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self, config: PillardConfig,
+                 bootstrap: bool = False):
+        self.bootstrap = bootstrap
         self.config = config
         super().__init__()
 
     def initialize_processes(self):
-        self.processes.append(KeyManager(self.config))
+        self.processes.append(
+            KeyManager.get_local_instance(
+                self.config
+            ))
 
     def check_processes(self):
         if not self.processes:
@@ -151,12 +158,24 @@ class PillarDaemon:
         self.stop_signal = multiprocessing.Event()
         self.logger = logging.getLogger(self.__repr__())
         self.config = config
+        base_managers = [
+            DBWorkerManager(self.config),
+            IPFSWorkerManager(self.config),
+            CidMessengerWorkerManager(self.config)
+
+        ]
         self.process_managers = []
-        self.process_managers.append(IPFSWorkerManager(self.config))
-        self.process_managers.append(CidMessengerWorkerManager(self.config))
-        self.process_managers.append(DBWorkerManager(self.config))
-        self.process_managers.append(KeyManagerWorkerManager(self.config))
-        self.process_managers.append(NodeWorkerManager(self.config))
+
+        for manager in base_managers:
+            self.process_managers.append(manager)
+            manager.start_all_processes()
+
+        self.process_managers.append(
+            KeyManagerWorkerManager(self.config)
+        )
+        self.process_managers.append(
+            NodeWorkerManager(self.config)
+        )
         signal.signal(signal.SIGINT, self.stop)
 
     def start(self):
