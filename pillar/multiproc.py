@@ -201,6 +201,7 @@ class PillarThreadInterface:
 
     def command(self, command_name: str, *args, **kwargs):
         command = QueueCommand(command_name, *args, **kwargs)
+        self.logger.info(f"Sending command {command_name}")
         self.queue_thread_class.command_queue.put(command)
         return self.get_command_output(command.id)
 

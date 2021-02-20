@@ -143,23 +143,27 @@ class TestNodeWorkerManager(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
+        NodeWorkerManager.initialize_processes = MagicMock()
         self.pm = NodeWorkerManager(self.config)
 
     @patch('pillar.identity.Node')
     def test_check_process_re_initialize_when_empty_processes(self,
                                                               mocked_worker):
         self.pm.processes = []
-        self.pm.initialize_processes = MagicMock()
         self.pm.check_processes()
         self.pm.initialize_processes.assert_called()
 
 
 class TestPillarDaemon(asynctest.TestCase):
 
+    @patch("pillar.daemon.DBWorkerManager")
+    @patch("pillar.daemon.IPFSWorkerManager")
+    @patch("pillar.daemon.CidMessengerWorkerManager")
+    @patch("pillar.daemon.KeyManagerWorkerManager")
+    @patch("pillar.daemon.NodeWorkerManager")
     def setUp(self, *args) -> None:
         self.config = PillardConfig()
         self.daemon = PillarDaemon(self.config)
-        self.daemon.process_managers = []
         self.daemon.process_managers.append(MagicMock())
 
     def test_start_processes(self):
