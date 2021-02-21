@@ -60,7 +60,6 @@ class LocalIdentity(PillarDBObject,
             raise WrongMessageType(type(invitation))
         key = self.id_interface.key_manager.get_key_from_keyring(
             peer_fingerprint)
-        self.channel_manager.add_peer(key, invitation)
 
     def create_invitation(self, peer_fingerprint_cid):
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(

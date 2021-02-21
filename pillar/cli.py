@@ -43,21 +43,6 @@ class CLI:
             daemon = PillarDaemon(self.config)
             daemon.start()
 
-            key_manager = KeyManager(self.config)
-            key_manager.start()
-
-            ipfs_worker_instance = IPFSWorker(str(self))
-            ipfs_worker_instance.start()
-            cid_messenger_instance = CIDMessenger(
-                PillarKeyType.NODE_SUBKEY,
-                self.config)
-            cid_messenger_instance.start()
-            db_worker_instance = PillarDBWorker(self.config)
-            db_worker_instance.start()
-
-            pds = PillarDataStore(self.config)
-            node = Node.get_local_instance(self.config, pds)
-            node.start()
             if self.args.identity_command == 'create_invitation':
                 print(self.interface.node_identity.create_invitation(
                     self.args.peer_fingerprint_cid))
@@ -70,11 +55,6 @@ class CLI:
         else:
             print("No subcommand provided")
             sys.exit(1)
-        key_manager.exit()
-        db_worker_instance.exit()
-        cid_messenger_instance.exit()
-        ipfs_worker_instance.exit()
-        print("that's all?")
 
     def parse_args(self, args: list) -> Namespace:
         parser = argparse.ArgumentParser()
