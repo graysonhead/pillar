@@ -42,7 +42,6 @@ class CLI:
         elif self.args.sub_command == 'identity':
             daemon = PillarDaemon(self.config)
             daemon.start()
-
             if self.args.identity_command == 'create_invitation':
                 print(self.interface.node_identity.create_invitation(
                     self.args.peer_fingerprint_cid))
