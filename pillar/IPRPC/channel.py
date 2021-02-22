@@ -9,7 +9,7 @@ from .messages import IPRPCMessage,\
     PeeringKeepalive
 from ..keymanager import EncryptionHelper
 from ..ipfs import IPFSClient
-from multiprocessing import Process, Pipe
+from multiprocessing import Process, Pipe, Event
 from ..async_untils import handler_loop
 import time
 import pgpy
@@ -98,6 +98,7 @@ class IPRPCChannel(Process):
         self.timeout = None
         self.keepalive_send_timeout = None
         self._establish_and_rotate_queues()
+        self.shutdown_callback = Event()
         super().__init__()
         self.logger.info(
             f"Spawned channel between {self.id} and {self.peer_id}")
@@ -168,11 +169,17 @@ class IPRPCChannel(Process):
                 self._async_rotate_queues_wrapper,
                 sleep=5
             ))
+            asyncio.ensure_future(handler_loop(
+                self._stop_on_shutdown_event,
+                sleep=1
+            ))
             loop = asyncio.get_event_loop()
             loop.run_forever()
             print(f"Cancelling rx workers: {rx_workers}")
             for rx_worker in rx_workers:
                 rx_worker.cancel()
+            if self.shutdown_callback.is_set():
+                break
 
     def _change_peering_status(self, new_status: PeeringStatus):
         if self.status != new_status:
@@ -203,6 +210,11 @@ class IPRPCChannel(Process):
         if time.time() > self.timeout:
             if not self.status == PeeringStatus.ESTABLISHING:
                 self._change_peering_status(PeeringStatus.IDLE)
+
+    async def _stop_on_shutdown_event(self) -> None:
+        loop = asyncio.get_event_loop()
+        if self.shutdown_callback.is_set():
+            loop.stop()
 
     async def _async_rotate_queues_wrapper(self) -> None:
         """

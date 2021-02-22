@@ -4,8 +4,8 @@ from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
 from pillar.identity import PrimaryIdentityMixIn
 from pillar.multiproc import MixedClass
-from pillar.simple_daemon import Daemon
 from pathlib import Path
+from pillar.daemon import PillarDaemon
 import os
 import sys
 import logging
@@ -54,7 +54,7 @@ class Bootstrapper:
             sys.exit(1)
 
     def bootstrap_pre(self):
-        self.daemon = Daemon(self.config, bootstrap=True)
+        self.daemon = PillarDaemon(self.config, bootstrap=True)
         self.daemon.start()
 
     def bootstrap_post(self):

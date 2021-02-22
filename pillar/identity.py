@@ -27,7 +27,6 @@ class LocalIdentity(PillarDBObject,
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
-        self.channel_manager = None
         self.cid_messenger_instance = None
         self.id_interface = IdentityInterface()
         super().__init__()
@@ -94,10 +93,6 @@ class LocalIdentity(PillarDBObject,
 
         return self.id_interface.cid_messenger.add_unencrypted_message_to_ipfs(
             message)
-
-    def create_peer_channels(self):
-        for key in self.id_interface.key_manager.get_keys():
-            self.channel_manager.add_peer(key)
 
     @classmethod
     def get_local_instance(cls, config: PillardConfig):
@@ -187,6 +182,10 @@ class Node(IdentityWithChannel):
         self.fingerprint_cid = fingerprint_cid
         multiprocessing.Process.__init__(self)
         super().__init__(*args)
+
+    @node_identity_methods.register_method
+    def get_fingerprint(self):
+        return self.fingerprint
 
     @node_identity_methods.register_method
     def get_fingerprint_cid(self):

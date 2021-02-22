@@ -161,6 +161,7 @@ class TestPillarDaemon(asynctest.TestCase):
     @patch("pillar.daemon.CidMessengerWorkerManager")
     @patch("pillar.daemon.KeyManagerWorkerManager")
     @patch("pillar.daemon.NodeWorkerManager")
+    @patch("pillar.daemon.ChannelManager")
     def setUp(self, *args) -> None:
         self.config = PillardConfig()
         self.daemon = PillarDaemon(self.config)
