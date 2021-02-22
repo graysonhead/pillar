@@ -1,9 +1,13 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
-from .identity import Node
-from .keymanager import KeyManager, PillarKeyType
+from .identity import NodeIdentityMixIn, Node
+from .keymanager import KeyManager, KeyManagerCommandQueueMixIn, PillarKeyType
 from .IPRPC.cid_messenger import CIDMessenger
+from .multiproc import MixedClass
+from .keymanager import EncryptionHelper
+from .IPRPC.channel import IPRPCChannel
+
 import logging
 import multiprocessing
 import signal
@@ -151,6 +155,46 @@ class CidMessengerWorkerManager(ProcessManager):
             self.initialize_processes()
 
 
+class ChannelManagerInterface(KeyManagerCommandQueueMixIn,
+                              NodeIdentityMixIn,
+                              metaclass=MixedClass):
+    pass
+
+
+class ChannelManager(ProcessManager):
+
+    def __init__(self, config: PillardConfig):
+        self.interface = ChannelManagerInterface()
+        self.config = config
+        super().__init__()
+
+    def check_processes(self):
+        keys = self.interface.key_manager.get_keys()
+        our_fingerprint = self.interface.node_identity.get_fingerprint()
+        for key in keys:
+            try:
+                next(
+                    filter(
+                        lambda x: x.peer_id == key.fingerprint, self.processes
+                           )
+                )
+            except StopIteration:
+                self.processes.append(IPRPCChannel(
+                    our_fingerprint,
+                    peer_fingerprint=key.fingerprint,
+                    encryption_helper=EncryptionHelper(
+                        PillarKeyType.NODE_SUBKEY),
+                    # TODO: IPFS Configuration
+                ))
+        for channel in self.processes:
+            try:
+                next(filter(lambda x: x.fingerprint == channel.peer_id, keys))
+            except StopIteration:
+                channel.terminate()
+
+        self.start_all_processes()
+
+
 class PillarDaemon:
 
     def __init__(self,
@@ -176,6 +220,9 @@ class PillarDaemon:
         self.process_managers.append(
             NodeWorkerManager(self.config)
         )
+        self.process_managers.append(
+            ChannelManager(self.config)
+        )
         signal.signal(signal.SIGINT, self.stop)
 
     def start(self):
@@ -187,7 +234,7 @@ class PillarDaemon:
             self.process_housekeeping()
             if self.stop_signal.is_set():
                 break
-            time.sleep(1)
+            time.sleep(10)
 
     def process_housekeeping(self):
         for manager in self.process_managers:
