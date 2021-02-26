@@ -5,6 +5,7 @@ from pillar.identity import NodeIdentityMixIn
 from pillar.bootstrap import Bootstrapper
 from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.daemon import PillarDaemon
+from pillar.simple_daemon import Daemon as SimpleDaemon
 from pathlib import Path
 import sys
 import argparse
@@ -33,6 +34,9 @@ class CLI:
         if self.args.sub_command == 'bootstrap':
             Bootstrapper(self.args)
             exit(0)
+        elif self.args.sub_command == 'test':
+            daemon = SimpleDaemon(self.config)
+            daemon.start()
         elif self.args.sub_command == 'daemon':
             daemon = PillarDaemon(
                 self.config
@@ -70,6 +74,8 @@ class CLI:
         bootstrap.add_argument("--email", help="Email address of the person "
                                "whose pillar user is being bootstrapped")
 
+        subparsers.add_parser("test",
+                              help="for running tests")
         subparsers.add_parser("daemon",
                               help="Run pillar daemon")
         key = subparsers.add_parser("identity",

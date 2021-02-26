@@ -15,6 +15,7 @@ import time
 import pgpy
 import hashlib
 from datetime import datetime, timedelta
+from pillar.keymanager import KeyManager, PillarKeyType, EncryptionHelper
 
 
 class PeeringStatus(Enum):
@@ -115,12 +116,13 @@ class IPRPCChannel(Process):
         """
         return self.tx_input, self.rx_output
 
-    def run(self) -> None:
+    def run(self):
         """
         This method should not be called directly, .start() will start a
         subprocess thread where this method will be called.
         :return:
         """
+        self.encryption_helper = EncryptionHelper(PillarKeyType.NODE_SUBKEY)
         while True:
             self.timeout = time.time() + self.keepalive_timeout_interval
             self.keepalive_send_timeout = time.time() + \
@@ -309,7 +311,9 @@ class IPRPCChannel(Process):
         self.logger.info(f"Set our ipfs peer id to {self.our_ipfs_peer_id}")
 
     async def _send_message(self, call: IPRPCMessage):
+        self.logger.debug(f"Sending message: {call}")
         message = call.serialize_to_json()
+        print(KeyManager.command_queue)
         if self.encryption_helper:
             message = self.encryption_helper.\
                 sign_and_encrypt_string_to_peer_fingerprint(
