@@ -7,6 +7,7 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
 from .keymanager import EncryptionHelper
 from .IPRPC.channel import IPRPCChannel
+from pathos.helpers import mp as pmp
 
 import logging
 import multiprocessing
@@ -39,10 +40,10 @@ class ProcessManager:
         for process in self.processes:
             self.logger.info(f"Sending shutdown event to {process}")
             process.shutdown_callback.set()
-            for process in self.processes:
-                process.join(join_timeout)
-                if process.exitcode is None:
-                    process.terminate()
+        for process in self.processes:
+            process.join(join_timeout)
+            if process.exitcode is None:
+                process.terminate()
 
     def prune_dead_processes(self):
         processes_to_remove = []
@@ -61,7 +62,11 @@ class ProcessManager:
 
 class IPFSWorkerManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self, config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.config = config
         super().__init__()
 
@@ -70,7 +75,9 @@ class IPFSWorkerManager(ProcessManager):
 
     def get_new_process(self):
         ipfs_client = IPFSClient(aioipfs_config=self.get_ipfs_config())
-        return IPFSWorker(ipfs_client=ipfs_client)
+        return IPFSWorker(self.command_queue,
+                          self.output_queue,
+                          ipfs_client=ipfs_client)
 
     def initialize_processes(self):
         for i in range(self.config.get_value('ipfs_workers')):
@@ -88,12 +95,18 @@ class IPFSWorkerManager(ProcessManager):
 
 class DBWorkerManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self, config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.config = config
         super().__init__()
 
     def get_new_process(self):
-        return PillarDBWorker(self.config)
+        return PillarDBWorker(self.config,
+                              self.command_queue,
+                              self.output_queue)
 
     def initialize_processes(self):
         self.processes.append(self.get_new_process())
@@ -106,13 +119,20 @@ class DBWorkerManager(ProcessManager):
 
 class NodeWorkerManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self,
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.config = config
         super().__init__()
 
     def initialize_processes(self):
         self.processes.append(
-            Node.get_local_instance(self.config)
+            Node.get_local_instance(self.config,
+                                    self.command_queue,
+                                    self.output_queue)
         )
 
     def check_processes(self):
@@ -123,7 +143,11 @@ class NodeWorkerManager(ProcessManager):
 class KeyManagerWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue,
                  bootstrap: bool = False):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.bootstrap = bootstrap
         self.config = config
         super().__init__()
@@ -131,7 +155,9 @@ class KeyManagerWorkerManager(ProcessManager):
     def initialize_processes(self):
         self.processes.append(
             KeyManager.get_local_instance(
-                self.config
+                self.config,
+                self.command_queue,
+                self.output_queue
             ))
 
     def check_processes(self):
@@ -141,13 +167,21 @@ class KeyManagerWorkerManager(ProcessManager):
 
 class CidMessengerWorkerManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self,
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.config = config
         super().__init__()
 
     def initialize_processes(self):
         self.processes.append(
-            CIDMessenger(PillarKeyType.NODE_SUBKEY, self.config)
+            CIDMessenger(PillarKeyType.NODE_SUBKEY,
+                         self.config,
+                         self.command_queue,
+                         self.output_queue)
         )
 
     def check_processes(self):
@@ -163,8 +197,15 @@ class ChannelManagerInterface(KeyManagerCommandQueueMixIn,
 
 class ChannelManager(ProcessManager):
 
-    def __init__(self, config: PillardConfig):
-        self.interface = ChannelManagerInterface()
+    def __init__(self,
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
+        self.interface = ChannelManagerInterface(str(self),
+                                                 command_queue=command_queue,
+                                                 output_queue=output_queue)
         self.config = config
         super().__init__()
 
@@ -183,7 +224,9 @@ class ChannelManager(ProcessManager):
                     our_fingerprint,
                     peer_fingerprint=key.fingerprint,
                     encryption_helper=EncryptionHelper(
-                        PillarKeyType.NODE_SUBKEY),
+                        PillarKeyType.NODE_SUBKEY,
+                        self.command_queue,
+                        self.output_queue),
                     # TODO: IPFS Configuration
                 ))
         for channel in self.processes:
@@ -199,35 +242,58 @@ class PillarDaemon:
 
     def __init__(self,
                  config: PillardConfig):
+        self.queue_manager = pmp.Manager()
+        self.shared_command_queue = self.queue_manager.Queue()
+        self.shared_output_queue = self.queue_manager.Queue()
         self.stop_signal = multiprocessing.Event()
         self.logger = logging.getLogger(self.__repr__())
         self.config = config
-        base_managers = [
-            DBWorkerManager(self.config),
-            IPFSWorkerManager(self.config),
-            CidMessengerWorkerManager(self.config)
-
-        ]
         self.process_managers = []
-
-        for manager in base_managers:
-            self.process_managers.append(manager)
-            manager.start_all_processes()
-
-        self.process_managers.append(
-            KeyManagerWorkerManager(self.config)
-        )
-        self.process_managers.append(
-            NodeWorkerManager(self.config)
-        )
-        self.process_managers.append(
-            ChannelManager(self.config)
-        )
         signal.signal(signal.SIGINT, self.stop)
 
-    def start(self):
-        for manager in self.process_managers:
+    def start_stage_1(self):
+        managers = [DBWorkerManager(self.config,
+                                    self.shared_command_queue,
+                                    self.shared_output_queue),
+                    IPFSWorkerManager(self.config,
+                                      self.shared_command_queue,
+                                      self.shared_output_queue)]
+        for manager in managers:
+            self.process_managers.append(manager)
             manager.start_all_processes()
+        print("Stage 1 complete")
+
+    def start_stage_2(self):
+        managers = [KeyManagerWorkerManager(self.config,
+                                            self.shared_command_queue,
+                                            self.shared_output_queue),
+                    NodeWorkerManager(self.config,
+                                      self.shared_command_queue,
+                                      self.shared_output_queue)]
+        for manager in managers:
+            self.process_managers.append(manager)
+            manager.start_all_processes()
+        print("Stage 2 complete")
+
+    def start_stage_3(self):
+        managers = [
+            CidMessengerWorkerManager(self.config,
+                                      self.shared_command_queue,
+                                      self.shared_output_queue),
+            ChannelManager(self.config,
+                           command_queue=self.shared_command_queue,
+                           output_queue=self.shared_output_queue)]
+        for manager in managers:
+            self.process_managers.append(manager)
+            manager.start_all_processes()
+        print("Startup complete")
+
+    def start(self):
+        self.start_stage_1()
+        time.sleep(5)
+        self.start_stage_2()
+        time.sleep(5)
+        self.start_stage_3()
 
     def start_housekeeping(self):
         while not self.stop_signal.is_set():

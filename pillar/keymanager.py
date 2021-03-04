@@ -7,8 +7,7 @@ import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
     MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDBWorker, PillarDBObject, Key, KeyManagerData
-from .interfaces import PillarInterfaces
+from .db import PillarDBObject, Key, KeyManagerData
 from .multiproc import PillarWorkerThread, \
     PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
@@ -16,7 +15,9 @@ from enum import Enum
 from uuid import uuid4
 import os
 import logging
-from pathos.helpers import mp as multiprocessing
+from pathos.helpers import mp as pmp
+from .ipfs import IPFSMixIn
+from .db import DBMixIn
 
 
 class PillarKeyType(Enum):
@@ -63,21 +64,27 @@ class PillarPGPKey(PillarDBObject):
         self.key = None
         self.invitation_id = None
         self.invitation = None
-        super().__init__()
+        super().__init__(None, None)
 
     def load_pgpy_key(self, key: pgpy.PGPKey):
         self.fingerprint = key.fingerprint
         self.key = bytes(key)
 
     @classmethod
-    def get_keys(cls):
-        instances = cls.load_all_from_db()
+    def get_keys(cls, command_queue: pmp.Queue, output_queue: pmp.Queue):
+        instances = cls.load_all_from_db(command_queue, output_queue)
         ret = []
 
         for instance in instances:
             key, o = pgpy.PGPKey.from_blob(instance.key)
             ret.append(key)
         return ret
+
+
+class KeyManagerInterfaces(DBMixIn,
+                           IPFSMixIn,
+                           metaclass=MixedClass):
+    pass
 
 
 class KeyManager(PillarDBObject,
@@ -88,13 +95,18 @@ class KeyManager(PillarDBObject,
     the keyring used to validate and encrypt messages to peers.
     """
     model = KeyManagerData
-    command_queue = multiprocessing.Queue()
-    output_queue = multiprocessing.Queue()
-    shutdown_callback = multiprocessing.Event()
     methods_register = key_manager_methods
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self,
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
         self.logger = logging.getLogger('<KeyManager>')
+        self.command_queue = command_queue
+        self.output_queue = output_queue
+        super(PillarDBObject, self).__init__(self.command_queue,
+                                             self.output_queue)
+        super(PillarWorkerThread, self).__init__()
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()
         self.config = config
@@ -111,21 +123,23 @@ class KeyManager(PillarDBObject,
             self.node_uuid = str(uuid4())
 
         self.queue_thread_class = self.__class__
-        self.interfaces = PillarInterfaces()
-        PillarWorkerThread.__init__(self)
-        super().__init__()
+        self.interfaces = KeyManagerInterfaces(str(self),
+                                               self.command_queue,
+                                               self.output_queue)
 
     @classmethod
-    def get_local_instance(cls, config: PillardConfig):
-        return cls.load_all_from_db([config])[0]
+    def get_local_instance(cls,
+                           config: PillardConfig,
+                           command_queue: pmp.Queue,
+                           output_queue: pmp.Queue):
+        return cls.load_all_from_db(command_queue,
+                                    output_queue,
+                                    init_args=[config,
+                                               command_queue,
+                                               output_queue])[0]
 
     def pre_run(self):
-        self.db_worker_instance = PillarDBWorker(self.config)
-        self.db_worker_instance.start()
         self.import_peer_keys_from_database()
-
-    def shutdown_routine(self):
-        self.db_worker_instance.exit()
 
     @ key_manager_methods.register_method
     def import_or_update_peer_key(self, cid):
@@ -145,7 +159,8 @@ class KeyManager(PillarDBObject,
         return self.import_peer_key(peer_key)
 
     def import_peer_keys_from_database(self):
-        peer_keys = PillarPGPKey.get_keys()
+        peer_keys = PillarPGPKey.get_keys(self.command_queue,
+                                          self.output_queue)
 
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
@@ -447,12 +462,16 @@ class EncryptionHelper:
     tasks that involve the use of pillar's other web of trust facilities
     """
 
-    def __init__(self, keytype: PillarKeyType):
+    def __init__(self, keytype: PillarKeyType,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
         self.logger = logging.getLogger(
             f'<{self.__class__.__name__}>')
         self.keytype = keytype
 
-        self.interface = EncryptionHelperInterface()
+        self.interface = EncryptionHelperInterface(str(self),
+                                                   command_queue=command_queue,
+                                                   output_queue=output_queue)
 
         self.local_key = self.interface.key_manager.\
             get_private_key_for_key_type(self.keytype)

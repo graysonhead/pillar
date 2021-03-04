@@ -14,6 +14,7 @@ from ..multiproc import PillarThreadMethodsRegister, \
     QueueCommand, \
     MixedClass
 from multiprocessing import Queue, Event
+from pathos.helpers import mp as pmp
 
 test_class_register = PillarThreadMethodsRegister()
 test_class_2_register = PillarThreadMethodsRegister()
@@ -210,3 +211,69 @@ class TestMultipleMixInInterfacesOnSameClass(asynctest.TestCase):
         self.assertEqual(True, hasattr(interface_1, "return_hi_async"))
         self.assertEqual(False, hasattr(interface_1, "return_hi_2"))
         self.assertEqual(True, hasattr(interface_2, "return_hi_2"))
+
+
+test_managed_queue_register = PillarThreadMethodsRegister()
+
+
+class TestMQRWorker(PillarWorkerThread):
+    methods_register = test_managed_queue_register
+
+    @test_managed_queue_register.register_method
+    def return_hi(self):
+        return "hi"
+
+
+class TestMQRMixIn(PillarThreadMixIn):
+    queue_thread_class = TestMQRWorker
+    interface_name = "mqr"
+
+
+class MQRInterface(TestMQRMixIn,
+                   metaclass=MixedClass):
+    pass
+
+
+class TestMQR(asynctest.TestCase):
+
+    def setUp(self) -> None:
+        manager = pmp.Manager()
+        self.command_queue = manager.Queue()
+        self.output_queue = manager.Queue()
+        self.worker = TestMQRWorker(command_queue=self.command_queue,
+                                    output_queue=self.output_queue)
+        self.interface = MQRInterface(command_queue=self.command_queue,
+                                      output_queue=self.output_queue)
+        self.worker.shutdown_callback.set()
+
+    def test_queue_connection(self):
+        self.interface.mqr.command_queue.put('test')
+        result = self.worker.command_queue.get()
+        self.assertEqual('test', result)
+
+    def test_mqr_put_on_provided_queue(self):
+        self.interface.mqr.command_queue.put = MagicMock()
+        self.interface.mqr.get_command_output = MagicMock()
+        self.interface.mqr.return_hi()
+        self.interface.mqr.command_queue.put.assert_called()
+        self.interface.mqr.get_command_output.assert_called()
+
+    async def test_mqr_runs_remote_command(self):
+        command = QueueCommand('return_hi',
+                               self.worker.__class__.__name__,
+                               str(self.interface))
+        self.interface.mqr.command_queue.put(command)
+        time.sleep(.01)
+        await self.worker.run_queue_commands()
+        time.sleep(.01)
+        result = self.worker.output_queue.get_nowait()
+        self.assertEqual('hi', result[command.id])
+
+    async def test_mqr_returns_wrong_task_to_queue(self):
+        command = QueueCommand('return_hi', 'wrong_class', str(self.interface))
+        self.interface.mqr.command_queue.put(command)
+        time.sleep(.01)
+        await self.worker.run_queue_commands()
+        time.sleep(.01)
+        # This shouldn't raise Empty because the worker returned the command
+        self.interface.mqr.command_queue.get_nowait()
