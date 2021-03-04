@@ -14,7 +14,7 @@ from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
 import logging
-import multiprocessing
+from pathos.helpers import mp as pmp
 
 
 class IdentityInterface(KeyManagerCommandQueueMixIn,
@@ -26,13 +26,21 @@ class IdentityInterface(KeyManagerCommandQueueMixIn,
 class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
-                 config: PillardConfig, start_channel=False):
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
         self.public_key_cid = None
         self.config = config
         self.cid_messenger_instance = None
-        self.id_interface = IdentityInterface()
-        super().__init__()
+        self.id_interface = IdentityInterface(str(self),
+                                              command_queue=command_queue,
+                                              output_queue=output_queue)
+        PillarDBObject.__init__(self, self.command_queue, self.output_queue)
+        PillarWorkerThread.__init__(self, self.command_queue,
+                                    self.output_queue)
 
     def start_channel_manager(self):
         if self.channel_manager is None:
@@ -44,7 +52,9 @@ class LocalIdentity(PillarDBObject,
                 self.logger.debug('Channel manager started successfully.')
 
     def pre_run(self):
-        self.encryption_helper = EncryptionHelper(self.key_type)
+        self.encryption_helper = EncryptionHelper(self.key_type,
+                                                  self.command_queue,
+                                                  self.output_queue)
 
         self.public_key_cid = self.id_interface.key_manager.\
             get_user_primary_key_cid()
@@ -100,8 +110,15 @@ class LocalIdentity(PillarDBObject,
             message)
 
     @classmethod
-    def get_local_instance(cls, config: PillardConfig):
-        return cls.load_all_from_db([config])[0]
+    def get_local_instance(cls,
+                           config: PillardConfig,
+                           command_queue: pmp.Queue,
+                           output_queue: pmp.Queue):
+        return cls.load_all_from_db(command_queue,
+                                    output_queue,
+                                    init_args=[config,
+                                               command_queue,
+                                               output_queue])[0]
 
 
 primary_identity_methods = PillarThreadMethodsRegister()
@@ -110,13 +127,10 @@ primary_identity_methods = PillarThreadMethodsRegister()
 class Primary(LocalIdentity):
     model = PrimaryIdentity
     methods_register = primary_identity_methods
-    command_queue = multiprocessing.Queue()
-    output_queue = multiprocessing.Queue()
-    shutdown_callback = multiprocessing.Event()
 
     def __init__(self, *args):
         self.key_type = PillarKeyType.USER_PRIMARY_KEY
-        multiprocessing.Process.__init__(self)
+        pmp.Process.__init__(self)
         super().__init__(*args)
 
     @ primary_identity_methods.register_method
@@ -173,9 +187,6 @@ node_identity_methods = PillarThreadMethodsRegister()
 class Node(IdentityWithChannel):
     model = NodeIdentity
     methods_register = node_identity_methods
-    command_queue = multiprocessing.Queue()
-    output_queue = multiprocessing.Queue()
-    shutdown_callback = multiprocessing.Event()
 
     def __init__(self, *args,
                  id: int = None,
@@ -186,7 +197,7 @@ class Node(IdentityWithChannel):
         self.key_type = PillarKeyType.NODE_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
-        multiprocessing.Process.__init__(self)
+        pmp.Process.__init__(self)
         super().__init__(*args)
 
     @node_identity_methods.register_method

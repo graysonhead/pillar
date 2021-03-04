@@ -16,7 +16,7 @@ from sqlalchemy.orm.properties import ColumnProperty
 from .config import PillardConfig
 from pgpy import PGPKeyring, PGPKey
 from contextlib import contextmanager
-from multiprocessing import Queue, Event
+from pathos.helpers import mp as pmp
 import logging
 
 pillar_db_register = PillarThreadMethodsRegister()
@@ -185,12 +185,14 @@ class PillarDBWorker(PillarWorkerThread):
     """
     This class generates new sessions with the get_session() method
     """
-    command_queue = Queue()
-    output_queue = Queue()
-    shutdown_callback = Event()
     methods_register = pillar_db_register
 
-    def __init__(self, config: PillardConfig):
+    def __init__(self,
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
@@ -251,11 +253,13 @@ class DBInterface(DBMixIn,
 class PillarDBObject:
     model = None
 
-    def __init__(self):
+    def __init__(self, command_queue: pmp.Queue, output_queue: pmp.Queue):
         if not hasattr(self, "logger"):
             self.logger = logging.getLogger("<PillarDBObject>")
 
-        self.interface = DBInterface()
+        self.interface = DBInterface(str(self),
+                                     command_queue=command_queue,
+                                     output_queue=output_queue)
 
     def _pds_generate_model(self):
         attribute_dict = {}
@@ -280,9 +284,14 @@ class PillarDBObject:
         self.interface.db.add_item(model_instance)
 
     @classmethod
-    def _load_model_instances_from_db(cls, expunge: bool = True,
+    def _load_model_instances_from_db(cls,
+                                      command_queue: pmp.Queue,
+                                      output_queue: pmp.Queue,
+                                      expunge: bool = True,
                                       return_interface=False):
-        temp_interface = DBInterface()
+        temp_interface = DBInterface(cls.__name__,
+                                     command_queue=command_queue,
+                                     output_queue=output_queue)
         model_instance = temp_interface.db.get_all(cls.model, expunge=expunge)
         if not return_interface:
             return model_instance
@@ -293,6 +302,7 @@ class PillarDBObject:
     def get_instance_from_model(cls, model,
                                 init_args: list = None,
                                 init_kwargs: dict = None):
+        print(f"{cls}, {model}")
         if init_args and init_kwargs:
             instance = cls(*init_args, **init_kwargs)
         elif init_args:
@@ -308,11 +318,15 @@ class PillarDBObject:
 
     @classmethod
     def load_all_from_db(cls,
+                         command_queue: pmp.Queue,
+                         output_queue: pmp.Queue,
                          init_args: list = None,
                          init_kwargs: dict = None,
                          expunge: bool = True,):
         instance_list = []
-        for model in cls._load_model_instances_from_db(expunge=expunge):
+        for model in cls._load_model_instances_from_db(command_queue,
+                                                       output_queue,
+                                                       expunge=expunge):
             instance_list.append(cls.get_instance_from_model(
                 model,
                 init_args=init_args,

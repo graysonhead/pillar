@@ -19,7 +19,7 @@ class CLI:
     def __init__(self, args: list):
         self.logger = logging.getLogger(self.__repr__())
         self.args = self.parse_args(args)
-        self.interface = CLIInterface()
+        self.interface = CLIInterface(repr(self))
 
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))

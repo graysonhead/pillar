@@ -1,20 +1,14 @@
-import multiprocessing as mp
-import traceback
 import os
 import logging
 import pgpy
 from .messages import IPRPCRegistry, IPRPCMessage
 from ..multiproc import PillarThreadMixIn, PillarThreadMethodsRegister,\
     PillarWorkerThread, MixedClass
-from ..ipfs import IPFSMixIn, IPFSWorker
 from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
     PillarKeyType
 from ..ipfs import IPFSMixIn
 from ..config import PillardConfig
-<< << << < HEAD
-== == == =
->>>>>> > e1acf53(fix bootstrap(again)
-                 make sure the node gets the right fingerprint and pubkey cid for its fingerprint_cid)
+from pathos.helpers import mp as pmp
 
 cid_messenger_register = PillarThreadMethodsRegister()
 
@@ -25,23 +19,29 @@ class CIDMessengerInterface(KeyManagerCommandQueueMixIn,
 
 
 class CIDMessenger(PillarWorkerThread):
-    command_queue = mp.Queue()
-    output_queue = mp.Queue()
-    shutdown_callback = mp.Event()
     methods_register = cid_messenger_register
 
     def __init__(self,
                  pillar_key_type: PillarKeyType,
-                 config: PillardConfig):
+                 config: PillardConfig,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue
+                 ):
+        self.command_queue = command_queue
+        self.output_queue = output_queue
         self.logger = logging.getLogger('<CIDMessenger>')
         self.logger.info("Starting CIDMessenger")
         self.config = config
         self.pillar_key_type = pillar_key_type
-        self.interface = CIDMessengerInterface()
         super().__init__()
+        self.interface = CIDMessengerInterface(str(self),
+                                               command_queue=command_queue,
+                                               output_queue=output_queue)
 
     def pre_run(self):
-        self.encryption_helper = EncryptionHelper(self.pillar_key_type)
+        self.encryption_helper = EncryptionHelper(self.pillar_key_type,
+                                                  self.command_queue,
+                                                  self.output_queue)
 
     @cid_messenger_register.register_method
     def get_and_decrypt_message_from_cid(self, cid: str, verify: bool = True):

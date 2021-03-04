@@ -75,5 +75,15 @@ class WrongMessageType(Exception):
 class DebugWDTTimeout(Exception):
     """
     In debug mode, raised for timeouts in PillarThreadInterface.
+    """
+    def __init__(self, command):
+        super().__init__(f"Command "
+                         f"{command.worker_class}.{command.command_name} "
+                         f"sent by {command.requestor} timed out."
+                         f" ID: {command.id}")
 
+
+class QueueMissing(Exception):
+    """
+    Raised when a Queue isn't passed to a multiproc instance
     """
