@@ -19,7 +19,7 @@ class CLI:
     def __init__(self, args: list):
         self.logger = logging.getLogger(self.__repr__())
         self.args = self.parse_args(args)
-        self.interface = CLIInterface(repr(self))
+        self.interface = None
 
         if self.args.verb:
             logging.basicConfig(level=getattr(logging, self.args.verb))
@@ -28,6 +28,12 @@ class CLI:
         if not self.args.sub_command == '' \
                                         'bootstrap':
             self.config = self.get_config(self.args.config)
+
+    def get_interface(self, daemon: PillarDaemon) -> None:
+        command_queue, output_queue = daemon.get_queues()
+        self.interface = CLIInterface(str(self),
+                                      command_queue=command_queue,
+                                      output_queue=output_queue)
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
@@ -42,6 +48,8 @@ class CLI:
         elif self.args.sub_command == 'identity':
             daemon = PillarDaemon(self.config)
             daemon.start()
+
+            self.get_interface(daemon)
 
             if self.args.identity_command == 'create_invitation':
                 print(self.interface.node_identity.create_invitation(

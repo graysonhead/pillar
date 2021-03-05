@@ -302,7 +302,6 @@ class PillarDBObject:
     def get_instance_from_model(cls, model,
                                 init_args: list = None,
                                 init_kwargs: dict = None):
-        print(f"{cls}, {model}")
         if init_args and init_kwargs:
             instance = cls(*init_args, **init_kwargs)
         elif init_args:
