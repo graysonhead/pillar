@@ -213,28 +213,24 @@ class ChannelManager(ProcessManager):
         keys = self.interface.key_manager.get_keys()
         our_fingerprint = self.interface.node_identity.get_fingerprint()
         for key in keys:
-            try:
-                next(
-                    filter(
-                        lambda x: x.peer_id == key.fingerprint, self.processes
-                           )
-                )
-            except StopIteration:
-                self.processes.append(IPRPCChannel(
-                    our_fingerprint,
-                    peer_fingerprint=key.fingerprint,
-                    encryption_helper=EncryptionHelper(
-                        PillarKeyType.NODE_SUBKEY,
-                        self.command_queue,
-                        self.output_queue),
-                    # TODO: IPFS Configuration
-                ))
-        for channel in self.processes:
-            try:
-                next(filter(lambda x: x.fingerprint == channel.peer_id, keys))
-            except StopIteration:
-                channel.terminate()
-
+            for short_fingerprint, subkey in key.subkeys.items():
+                try:
+                    next(
+                        filter(
+                            lambda x: x.peer_id == subkey.fingerprint,
+                            self.processes
+                               )
+                    )
+                except StopIteration:
+                    self.processes.append(IPRPCChannel(
+                        our_fingerprint,
+                        peer_fingerprint=subkey.fingerprint,
+                        encryption_helper=EncryptionHelper(
+                            PillarKeyType.NODE_SUBKEY,
+                            self.command_queue,
+                            self.output_queue),
+                        # TODO: IPFS Configuration
+                    ))
         self.start_all_processes()
 
 
@@ -251,6 +247,9 @@ class PillarDaemon:
         self.process_managers = []
         signal.signal(signal.SIGINT, self.stop)
 
+    def get_queues(self) -> tuple:
+        return self.shared_command_queue, self.shared_output_queue
+
     def start_stage_1(self):
         managers = [DBWorkerManager(self.config,
                                     self.shared_command_queue,
@@ -261,7 +260,6 @@ class PillarDaemon:
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()
-        print("Stage 1 complete")
 
     def start_stage_2(self):
         managers = [KeyManagerWorkerManager(self.config,
@@ -273,7 +271,6 @@ class PillarDaemon:
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()
-        print("Stage 2 complete")
 
     def start_stage_3(self):
         managers = [
@@ -286,13 +283,13 @@ class PillarDaemon:
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()
-        print("Startup complete")
+        self.logger.info("Startup complete")
 
     def start(self):
         self.start_stage_1()
-        time.sleep(5)
+        time.sleep(.01)
         self.start_stage_2()
-        time.sleep(5)
+        time.sleep(.01)
         self.start_stage_3()
 
     def start_housekeeping(self):
