@@ -424,7 +424,6 @@ class KeyManager(PillarDBObject,
     @ key_manager_methods.register_method
     def get_peer_primary_key_from_subkey_fingerprint(self,
                                                      subkey_fingerprint: str):
-        print(self.peer_subkey_map)
         primary_fingerprint = self.peer_subkey_map[subkey_fingerprint]
         key = self.get_key_from_keyring(primary_fingerprint)
         self.logger.debug(f"Loaded peer key: {key.fingerprint}")
