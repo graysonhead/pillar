@@ -36,14 +36,20 @@ class ProcessManager:
                     self.logger.info(f"Starting process {process}")
                     process.start()
 
-    def stop_all_processes(self, join_timeout: int = 5):
+    def stop_all_processes(self):
         for process in self.processes:
             self.logger.info(f"Sending shutdown event to {process}")
             process.shutdown_callback.set()
+
+    def kill_and_join_all_processes(self):
         for process in self.processes:
-            process.join(join_timeout)
-            if process.exitcode is None:
-                process.terminate()
+            try:
+                if process.is_alive():
+                    self.logger.info(f"Process {process} still alive, killing")
+                    process.kill()
+            except AssertionError:
+                pass
+            process.join()
 
     def prune_dead_processes(self):
         processes_to_remove = []
@@ -308,6 +314,9 @@ class PillarDaemon:
             self.stop_signal.set()
             for manager in self.process_managers:
                 manager.stop_all_processes()
+            time.sleep(3)
+            for manager in self.process_managers:
+                manager.kill_and_join_all_processes()
 
     def __del__(self):
         self.stop()
