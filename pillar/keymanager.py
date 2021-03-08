@@ -57,14 +57,14 @@ key_manager_methods = PillarThreadMethodsRegister()
 class PillarPGPKey(PillarDBObject):
     model = Key
 
-    def __init__(self):
+    def __init__(self, command_queue, output_queue):
         self.logger = logging.getLogger("<PillarPGPKey>")
 
         self.fingerprint = None
         self.key = None
         self.invitation_id = None
         self.invitation = None
-        super().__init__(None, None)
+        super().__init__(command_queue, output_queue)
 
     def load_pgpy_key(self, key: pgpy.PGPKey):
         self.fingerprint = key.fingerprint
@@ -72,7 +72,8 @@ class PillarPGPKey(PillarDBObject):
 
     @classmethod
     def get_keys(cls, command_queue: pmp.Queue, output_queue: pmp.Queue):
-        instances = cls.load_all_from_db(command_queue, output_queue)
+        instances = cls.load_all_from_db(command_queue, output_queue, [
+                                         command_queue, output_queue])
         ret = []
 
         for instance in instances:
@@ -159,8 +160,8 @@ class KeyManager(PillarDBObject,
         return self.import_peer_key(peer_key)
 
     def import_peer_keys_from_database(self):
-        peer_keys = PillarPGPKey.get_keys(self.command_queue,
-                                          self.output_queue)
+        peer_keys = PillarPGPKey.get_keys(
+            self.command_queue, self.output_queue)
 
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
@@ -180,7 +181,7 @@ class KeyManager(PillarDBObject,
                 f"Importing new public key {peer_key.fingerprint}")
             self.keyring.load(peer_key)
             if persist:
-                key = PillarPGPKey()
+                key = PillarPGPKey(self.command_queue, self.output_queue)
                 key.load_pgpy_key(peer_key)
                 key.pds_save()
             for k in peer_key.subkeys:
