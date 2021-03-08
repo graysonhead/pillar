@@ -191,12 +191,10 @@ class PillarDBWorker(PillarWorkerThread):
                  config: PillardConfig,
                  command_queue: pmp.Queue,
                  output_queue: pmp.Queue):
-        self.command_queue = command_queue
-        self.output_queue = output_queue
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
-        super().__init__()
+        super().__init__(command_queue=command_queue, output_queue=output_queue)
 
     def _get_sqlite_uri(self, path: str):
         absolute_path = path
