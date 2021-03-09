@@ -1,7 +1,7 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
-from .identity import NodeIdentityMixIn, Node
+from .identity import NodeIdentityMixIn, Node, Primary
 from .keymanager import KeyManager, KeyManagerCommandQueueMixIn, PillarKeyType
 from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
@@ -128,18 +128,27 @@ class NodeWorkerManager(ProcessManager):
     def __init__(self,
                  config: PillardConfig,
                  command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 output_queue: pmp.Queue,
+                 bootstrap: bool = False):
+        self.bootstrap = bootstrap
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.config = config
         super().__init__()
 
     def initialize_processes(self):
-        self.processes.append(
-            Node.get_local_instance(self.config,
-                                    self.command_queue,
-                                    self.output_queue)
-        )
+        if self.bootstrap:
+            self.processes.append(
+                Primary(self.config,
+                        self.command_queue,
+                        self.output_queue)
+            )
+        else:
+            self.processes.append(
+                Node.get_local_instance(self.config,
+                                        self.command_queue,
+                                        self.output_queue)
+            )
 
     def check_processes(self):
         if not self.processes:
@@ -159,12 +168,19 @@ class KeyManagerWorkerManager(ProcessManager):
         super().__init__()
 
     def initialize_processes(self):
-        self.processes.append(
-            KeyManager.get_local_instance(
-                self.config,
-                self.command_queue,
-                self.output_queue
-            ))
+        if self.bootstrap:
+            self.processes.append(
+                KeyManager(self.config,
+                           self.command_queue,
+                           self.output_queue)
+            )
+        else:
+            self.processes.append(
+                KeyManager.get_local_instance(
+                    self.config,
+                    self.command_queue,
+                    self.output_queue
+                ))
 
     def check_processes(self):
         if not self.processes:
@@ -243,7 +259,9 @@ class ChannelManager(ProcessManager):
 class PillarDaemon:
 
     def __init__(self,
-                 config: PillardConfig):
+                 config: PillardConfig,
+                 bootstrap: bool = False):
+        self.bootstrap = bootstrap
         self.queue_manager = pmp.Manager()
         self.shared_command_queue = self.queue_manager.Queue()
         self.shared_output_queue = self.queue_manager.Queue()
@@ -270,10 +288,12 @@ class PillarDaemon:
     def start_stage_2(self):
         managers = [KeyManagerWorkerManager(self.config,
                                             self.shared_command_queue,
-                                            self.shared_output_queue),
+                                            self.shared_output_queue,
+                                            bootstrap=self.bootstrap),
                     NodeWorkerManager(self.config,
                                       self.shared_command_queue,
-                                      self.shared_output_queue)]
+                                      self.shared_output_queue,
+                                      bootstrap=self.bootstrap)]
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()
@@ -289,6 +309,15 @@ class PillarDaemon:
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()
+
+    def start_channel_manager(self):
+        managers = [
+            ChannelManager(self.config,
+                           command_queue=self.shared_command_queue,
+                           output_queue=self.shared_output_queue)]
+        for manager in managers:
+            self.process_managers.append(manager)
+            manager.start_all_processes()
         self.logger.info("Startup complete")
 
     def start(self):
@@ -297,6 +326,9 @@ class PillarDaemon:
         self.start_stage_2()
         time.sleep(.01)
         self.start_stage_3()
+        if not self.bootstrap:
+            time.sleep(.01)
+            self.start_channel_manager()
 
     def start_housekeeping(self):
         while not self.stop_signal.is_set():

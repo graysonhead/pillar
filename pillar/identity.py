@@ -144,7 +144,9 @@ class Primary(LocalIdentity):
 
     def bootstrap_node(self):
         self.logger.info("Bootstrapping Node")
-        self.node = Node(self.config)
+        self.node = Node(self.config,
+                         self.command_queue,
+                         self.output_queue)
         self.id_interface.key_manager.generate_local_node_subkey()
 
         self.node.fingerprint = self.id_interface.key_manager.\

@@ -81,7 +81,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('pillar.identity.Node', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig(config_directory="/this/shouldnt/exist")
-        self.km = KeyManager(self.config)
+        self.km = KeyManager(self.config, MagicMock(), MagicMock())
 
     def test_instantiate_keymanager_class(self):
         assert(isinstance(self.km, KeyManager))
@@ -141,7 +141,7 @@ class TestNonEmptyKeyManager(TestCase):
            new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
-        self.km = KeyManager(self.config)
+        self.km = KeyManager(self.config, MagicMock(), MagicMock())
 
         self.km.import_peer_key_from_cid('not_used')
 
@@ -200,7 +200,7 @@ class TestKeyManagerSubkeyGeneration(TestCase):
            new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
-        self.km = KeyManager(self.config)
+        self.km = KeyManager(self.config, MagicMock(), MagicMock())
         self.km.start()
         self.config.set_value('config_directory', '.unittestconfigdir')
         dir = self.config.get_value('config_directory')

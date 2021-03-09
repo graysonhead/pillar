@@ -107,7 +107,8 @@ class KeyManager(PillarDBObject,
         self.output_queue = output_queue
         super(PillarDBObject, self).__init__(self.command_queue,
                                              self.output_queue)
-        super(PillarWorkerThread, self).__init__()
+        super().__init__(command_queue=command_queue,
+                         output_queue=output_queue)
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()
         self.config = config
@@ -420,7 +421,7 @@ class KeyManager(PillarDBObject,
                                                      subkey_fingerprint: str):
         primary_fingerprint = self.peer_subkey_map[subkey_fingerprint]
         key = self.get_key_from_keyring(primary_fingerprint)
-        self.logger.debug(f"Loaded peer key: {key}")
+        self.logger.debug(f"Loaded peer key: {key.fingerprint}")
         return key
 
     @ key_manager_methods.register_method

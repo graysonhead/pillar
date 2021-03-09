@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
+from pathos.helpers import mp as pmp
 
 
 class TestPillarDB(TestCase):
@@ -12,7 +13,10 @@ class TestPillarDB(TestCase):
     @patch.object(PillarDBWorker, '_get_engine')
     def test_engine_creation(self, mock_func):
         config = PillardConfig()
-        db = PillarDBWorker(config)
+        manager = pmp.Manager()
+        command_queue = manager.Queue()
+        output_queue = manager.Queue()
+        db = PillarDBWorker(config, command_queue, output_queue)
         db._get_engine('sqlite:///:memory:')
         mock_func.assert_called_with('sqlite:///:memory:')
 
@@ -58,17 +62,19 @@ class TestClass(PillarDBObject):
         self.unrelated_attrib = unrelated_attrib
         self.args = args
         self.kwargs = kwargs
-        super().__init__()
+        super().__init__(MagicMock(), MagicMock())
 
 
 class TestParentClass(PillarDBObject):
     model = TestParent
 
     def __init__(self, id: int = None,
-                 some_string: str = ''):
+                 some_string: str = '',
+                 command_queue=None,
+                 output_queue=None):
         self.id = id
         self.some_string = some_string
-        super().__init__()
+        super().__init__(command_queue, output_queue)
 
 
 class TestPillarDBObject(TestCase):
@@ -78,7 +84,7 @@ class TestPillarDBObject(TestCase):
                           "test_str": "hi",
                           "unrelated_attrib": "yo"}
         self.test_class = TestClass(**self.test_args)
-        self.test_class.interface.db = MagicMock()
+        self.test_class.db_interface.db = MagicMock()
         self.pds = MagicMock()
 
     def test_generate_model_instance(self):
@@ -90,17 +96,19 @@ class TestPillarDBObject(TestCase):
 
     def test_pds_save(self):
         self.test_class.pds_save()
-        self.test_class.interface.db.add_item.assert_called()
+        self.test_class.db_interface.db.add_item.assert_called()
 
     @patch('pillar.db.DBInterface')
     def test_load_instances_from_db(self, mocked_interface):
         instance, interface = TestClass.\
-            _load_model_instances_from_db(return_interface=True)
+            _load_model_instances_from_db(MagicMock(),
+                                          MagicMock(),
+                                          return_interface=True)
         interface.db.get_all.assert_called()
 
     @patch('pillar.db.DBInterface')
     def test_load_all_from_db_empty_no_models(self, patched_class):
-        result = TestClass.load_all_from_db()
+        result = TestClass.load_all_from_db(MagicMock(), MagicMock())
         self.assertEqual([], result)
 
     def test_load_instance_from_model_no_args(self):
@@ -124,7 +132,9 @@ class TestPillarDBObject(TestCase):
 class TestPillarDatastoreMixInRelationships(TestCase):
 
     def setUp(self) -> None:
-        self.test_parent = TestParentClass(some_string="hello")
+        self.test_parent = TestParentClass(some_string="hello",
+                                           command_queue=MagicMock(),
+                                           output_queue=MagicMock())
         self.pds = MagicMock()
 
     def test_pds_save(self):

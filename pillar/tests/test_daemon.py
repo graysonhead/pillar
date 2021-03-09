@@ -7,6 +7,7 @@ from ..daemon import ProcessManager, \
     NodeWorkerManager
 from ..config import PillardConfig
 import asynctest
+from pathos.helpers import mp as pmp
 
 
 class TestProcessManagerBase(TestCase):
@@ -82,9 +83,8 @@ class TestProcessManagerBase(TestCase):
         process.is_alive = True
         process.exitcode = 0
         self.pm.processes.append(process)
-        self.pm.stop_all_processes(join_timeout=5)
+        self.pm.stop_all_processes()
         process.shutdown_callback.set.assert_called()
-        process.join.assert_called_with(5)
         process.terminate.assert_not_called()
 
     def test_stop_unresponsive_process(self):
@@ -95,15 +95,16 @@ class TestProcessManagerBase(TestCase):
         self.pm.processes.append(process)
         self.pm.stop_all_processes()
         process.shutdown_callback.set.assert_called()
-        process.join.assert_called()
-        process.terminate.assert_called()
 
 
 class TestIPFSWorkerManager(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        self.pm = IPFSWorkerManager(self.config)
+        manager = pmp.Manager()
+        command_queue = manager.Queue()
+        output_queue = manager.Queue()
+        self.pm = IPFSWorkerManager(self.config, command_queue, output_queue)
 
     @patch('pillar.ipfs.IPFSWorker')
     def test_create_initial_processes(self, mocked_worker):
@@ -124,7 +125,10 @@ class TestDBWorkerManager(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        self.pm = DBWorkerManager(self.config)
+        manager = pmp.Manager()
+        command_queue = manager.Queue()
+        output_queue = manager.Queue()
+        self.pm = DBWorkerManager(self.config, command_queue, output_queue)
 
     @patch('pillar.db.PillarDBWorker')
     def test_create_initial_processes(self, mocked_worker):
@@ -143,8 +147,11 @@ class TestNodeWorkerManager(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
+        manager = pmp.Manager()
+        command_queue = manager.Queue()
+        output_queue = manager.Queue()
         NodeWorkerManager.initialize_processes = MagicMock()
-        self.pm = NodeWorkerManager(self.config)
+        self.pm = NodeWorkerManager(self.config, command_queue, output_queue)
 
     @patch('pillar.identity.Node')
     def test_check_process_re_initialize_when_empty_processes(self,
@@ -165,12 +172,7 @@ class TestPillarDaemon(asynctest.TestCase):
     def setUp(self, *args) -> None:
         self.config = PillardConfig()
         self.daemon = PillarDaemon(self.config)
-        self.daemon.process_managers.append(MagicMock())
-
-    def test_start_processes(self):
-        self.daemon.start()
-        for pm in self.daemon.process_managers:
-            pm.start_all_processes.assert_called()
+        self.daemon.process_managers = [MagicMock()]
 
     def test_stop_processes(self):
         self.daemon.stop()
