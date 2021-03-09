@@ -67,7 +67,7 @@ class LocalIdentity(PillarDBObject,
             import_peer_key_from_cid(invitation.public_key_cid)
         if not type(invitation) is InvitationMessage:
             raise WrongMessageType(type(invitation))
-        key = self.id_interface.key_manager.get_key_from_keyring( # noqa
+        key = self.id_interface.key_manager.get_key_from_keyring(  # noqa
             peer_fingerprint)
 
     def create_invitation(self, peer_fingerprint_cid):
@@ -151,9 +151,12 @@ class Primary(LocalIdentity):
 
     def bootstrap_node(self):
         self.logger.info("Bootstrapping Node")
+        self.node = Node(self.config,
+                         self.command_queue,
+                         self.output_queue)
+
         self.id_interface.key_manager.generate_local_node_subkey()
 
-        self.node = Node(self.config)
         self.node.fingerprint = self.id_interface.key_manager.\
             get_private_key_for_key_type(
                 PillarKeyType.NODE_SUBKEY).fingerprint

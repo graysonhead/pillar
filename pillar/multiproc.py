@@ -146,7 +146,6 @@ class PillarWorkerThread(pmp.Process):
                                 *args,
                                 **kwargs
                             )
-                        self.logger.debug(f"Enqueuing output: {output}")
                         self.output_queue.put(
                             {command.id: output}
                         )
@@ -160,6 +159,9 @@ class PillarWorkerThread(pmp.Process):
 
             except Empty:
                 await asyncio.sleep(0.01)
+            except BrokenPipeError or ConnectionResetError:
+                self.logger.error(f"{self} shutting down due to broken pipe")
+                self.shutdown_callback.set()
             if self.shutdown_callback.is_set():
                 self.shutdown_routine()
                 if self.loop:

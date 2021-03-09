@@ -93,7 +93,7 @@ class PillarDB:
 class PillarDataStore:
 
     def __init__(self, config: PillardConfig):
-        self.pdb = PillarDBWorker(config)
+        self.pdb = PillarDB(config)
         self.logger = logging.getLogger(self.__repr__())
 
     def get_session(self):
@@ -194,7 +194,8 @@ class PillarDBWorker(PillarWorkerThread):
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
-        super().__init__(command_queue=command_queue, output_queue=output_queue)
+        super().__init__(command_queue=command_queue,
+                         output_queue=output_queue)
 
     def _get_sqlite_uri(self, path: str):
         absolute_path = path
@@ -252,12 +253,16 @@ class PillarDBObject:
     model = None
 
     def __init__(self, command_queue: pmp.Queue, output_queue: pmp.Queue):
-        if not hasattr(self, "logger"):
-            self.logger = logging.getLogger("<PillarDBObject>")
+        self.command_queue = command_queue
+        self.output_queue = output_queue
+        self.db_interface = self.get_db_interface()
+        if not getattr(self, 'logger', None):
+            self.logger = logging.getLogger(str(self))
 
-        self.interface = DBInterface(str(self),
-                                     command_queue=command_queue,
-                                     output_queue=output_queue)
+    def get_db_interface(self):
+        return DBInterface(str(self),
+                           command_queue=self.command_queue,
+                           output_queue=self.output_queue)
 
     def _pds_generate_model(self):
         attribute_dict = {}
@@ -277,9 +282,9 @@ class PillarDBObject:
         return attribs
 
     def pds_save(self):
-        self.logger.info("Saving to database.")
+        self.logger.info(f"Saving {self} to database.")
         model_instance = self._pds_generate_model()
-        self.interface.db.add_item(model_instance)
+        self.db_interface.db.add_item(model_instance)
 
     @classmethod
     def _load_model_instances_from_db(cls,

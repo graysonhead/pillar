@@ -114,7 +114,7 @@ class TestMultiProc(asynctest.TestCase):
         self.assertIn('return_hi', test_class_register.methods.keys())
 
     async def test_class_remote_command_execute(self):
-        command = QueueCommand('return_hi')
+        command = QueueCommand('return_hi', 'TestClass', str(self))
         self.test_class_instance.command_queue.put(command)
         time.sleep(.01)
         await self.test_class_instance.run_queue_commands()
@@ -123,7 +123,7 @@ class TestMultiProc(asynctest.TestCase):
         self.assertEqual('hi', result[command.id])
 
     async def test_class_remote_command_execute_async(self):
-        command = QueueCommand('return_hi_async')
+        command = QueueCommand('return_hi_async', 'TestClass', str(self))
         self.test_class_instance.command_queue.put(command)
         time.sleep(.01)
         await self.test_class_instance.run_queue_commands()
@@ -140,8 +140,14 @@ class TestPillarQueueInterface(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
+        manager = pmp.Manager()
+        self.command_queue = manager.Queue()
+        self.output_queue = manager.Queue()
         self.interface = TestClassMixIn(TestClassMixIn.interface_name,
-                                        TestClassMixIn.queue_thread_class)
+                                        TestClassMixIn.queue_thread_class,
+                                        str(self),
+                                        command_queue=self.command_queue,
+                                        output_queue=self.output_queue)
 
     def test_class_remote_command_execute_autogen_method(self):
         self.interface.test_interface.\
@@ -151,12 +157,12 @@ class TestPillarQueueInterface(asynctest.TestCase):
         self.assertIn('somevalue', return_value.values())
 
     def test_get_return_value_from_queue(self):
-        test_uuid = uuid4()
-        self.test_class_instance.output_queue.put(
-            {test_uuid: "test_value"}
+        command = QueueCommand('fake_command', 'fake_class', 'fake_requestor')
+        self.output_queue.put(
+            {command.id: "test_value"}
         )
         return_value = self.interface.test_interface.\
-            get_command_output(test_uuid)
+            get_command_output(command, only_once=True)
         self.assertEqual("test_value", return_value)
 
     def test_returns_wrong_uuid_to_queue(self):
@@ -172,29 +178,19 @@ class TestPillarQueueInterface(asynctest.TestCase):
         self.assertEqual(test_output, output)
 
 
-class TestMultipleThreadInstances(asynctest.TestCase):
-
-    def setUp(self) -> None:
-        self.test_class_instance = TestClass()
-        self.interface = TestClassMixIn(TestClassMixIn.interface_name,
-                                        TestClassMixIn.queue_thread_class)
-        self.test_class_instance_2 = TestClass2()
-        self.interface2 = TestClass2MixIn(TestClass2MixIn.interface_name,
-                                          TestClass2MixIn.queue_thread_class)
-
-    def test_queues_not_same_instance(self):
-        self.assertNotEqual(self.test_class_instance.output_queue,
-                            self.test_class_instance_2.output_queue)
-        self.assertNotEqual(self.test_class_instance.command_queue,
-                            self.test_class_instance_2.command_queue)
-
-
 class TestMultipleMixInInterfacesOnSameClass(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
         self.test_class_instance_2 = TestClass2()
-        self.fake_plugin = MultipleMixInInterfaces()
+        self.manager = pmp.Manager()
+        self.command_queue = self.manager.Queue()
+        self.output_queue = self.manager.Queue()
+        self.fake_plugin = MultipleMixInInterfaces(
+            str(self),
+            self.command_queue,
+            self.output_queue
+        )
 
     def test_both_interfaces_created(self):
         self.assertEqual(True, hasattr(
@@ -242,7 +238,8 @@ class TestMQR(asynctest.TestCase):
         self.output_queue = manager.Queue()
         self.worker = TestMQRWorker(command_queue=self.command_queue,
                                     output_queue=self.output_queue)
-        self.interface = MQRInterface(command_queue=self.command_queue,
+        self.interface = MQRInterface(str(self),
+                                      command_queue=self.command_queue,
                                       output_queue=self.output_queue)
         self.worker.shutdown_callback.set()
 

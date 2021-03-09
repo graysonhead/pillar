@@ -32,10 +32,10 @@ class Bootstrapper:
         self.key_manager = None
         self.config_path = None
         self.config = None
+        self.interface = None
         self.user_key_name = self.args.user_name or self.user_name_prompt()
         self.user_key_email = self.args.email or self.email_prompt()
         self.defaults = self.args.defaults
-        self.interface = BootstrapInterface()
         self.bootstrap()
 
     def bootstrap(self):
@@ -57,14 +57,10 @@ class Bootstrapper:
             sys.exit(1)
 
     def bootstrap_pre(self):
-        self.daemon = PillarDaemon(self.config, bootstrap=True)
-        self.daemon.start()
+        pass
 
     def bootstrap_post(self):
-        self.key_manager.exit()
-        self.cid_messenger.exit()
-        self.ipfs_worker.exit()
-        self.primary_worker.exit()
+        self.daemon.stop()
 
     def bootstrap_pds_pre(self) -> PillarDataStore:
         pds = PillarDataStore(self.config)
@@ -125,6 +121,12 @@ class Bootstrapper:
         return keymanager
 
     def bootstrap_keymanager_exec(self):
+        self.daemon = PillarDaemon(self.config, bootstrap=True)
+        self.command_queue, self.output_queue = self.daemon.get_queues()
+        self.daemon.start()
+        self.interface = BootstrapInterface(str(self),
+                                            command_queue=self.command_queue,
+                                            output_queue=self.output_queue)
         self.interface.primary_identity.bootstrap(self.user_key_name,
                                                   self.user_key_email)
 

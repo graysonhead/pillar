@@ -59,7 +59,9 @@ class TestIPFSWorker(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.ipfs_client = AsyncMock()
-        self.worker = IPFSWorker(ipfs_client=self.ipfs_client)
+        self.worker = IPFSWorker(asynctest.MagicMock(),
+                                 asynctest.MagicMock(),
+                                 ipfs_client=self.ipfs_client)
 
     async def test_get_file(self):
         await self.worker.get_file('fake_cid', dstdir='/test_dir')
