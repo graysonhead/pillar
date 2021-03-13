@@ -7,7 +7,8 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
 from .keymanager import EncryptionHelper
 from .IPRPC.channel import IPRPCChannel
-from pathos.helpers import mp as pmp
+# from pathos.helpers import mp as pmp
+import multiprocessing as pmp
 
 import logging
 import multiprocessing
@@ -241,7 +242,7 @@ class ChannelManager(ProcessManager):
                         filter(
                             lambda x: x.peer_id == subkey.fingerprint,
                             self.processes
-                               )
+                        )
                     )
                 except StopIteration:
                     self.processes.append(IPRPCChannel(
