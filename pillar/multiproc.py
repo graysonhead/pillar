@@ -8,7 +8,10 @@ import inspect
 import signal
 import traceback
 from uuid import uuid4
-from pathos.helpers import mp as pmp
+# from pathos.helpers import mp as pmp
+import multiprocessing as pmp
+import pgpy
+import copy
 
 
 class DebugWDT(Process):
@@ -151,9 +154,19 @@ class PillarWorkerThread(pmp.Process):
                                 *args,
                                 **kwargs
                             )
-                        self.output_queue.put(
-                            {command.id: output}
-                        )
+
+                        if type(output) in [pgpy.PGPKey, pgpy.PGPMessage]:
+                            keyblob = str(copy.copy(output))
+                            time.sleep(2)
+                            self.output_queue.put(
+                                {command.id: {'PGPKey': keyblob}}
+                            )
+
+                        else:
+                            self.output_queue.put(
+                                {command.id: output}
+                            )
+
                     except Exception as e:
                         self.logger.warn(
                             ''.join(traceback.format_exception(
@@ -271,7 +284,16 @@ class PillarThreadInterface:
                     if id == command.id:
                         self.logger.debug(
                             f"got command output for command id {id}")
-                        ret = output
+                        if isinstance(output, dict):
+                            if 'PGPKey' in output.keys():
+
+                                ret, o = pgpy.PGPKey.from_blob(
+                                    output['PGPKey'])
+                            else:
+                                ret = output
+                        else:
+                            ret = output
+
                         found = True
                     else:
                         output_queue.put({id: output})

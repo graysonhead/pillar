@@ -1,3 +1,4 @@
+import collections
 import pgpy
 from pgpy.constants import PubKeyAlgorithm, \
     KeyFlags, HashAlgorithm, SymmetricKeyAlgorithm, CompressionAlgorithm
@@ -15,9 +16,11 @@ from enum import Enum
 from uuid import uuid4
 import os
 import logging
-from pathos.helpers import mp as pmp
+# from pathos.helpers import mp as pmp
+import multiprocessing as pmp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
+import copy
 
 
 class PillarKeyType(Enum):
@@ -54,6 +57,36 @@ class KeyOptions:
 key_manager_methods = PillarThreadMethodsRegister()
 
 
+class SerializingKeyList(collections.MutableSequence):
+
+    def __init__(self, *args):
+        self.list = list()
+        self.extend(list(args))
+
+    def check(self, key: pgpy.PGPKey):
+        if not isinstance(key, pgpy.PGPKey):
+            raise TypeError(f"wrong type {type(key)}; should be pgpy.PGPKey")
+
+    def __len__(self): return len(self.list)
+
+    def __getitem__(self, i):
+        ret, o = pgpy.PGPKey.from_blob(self.list[i])
+        return ret
+
+    def __delitem__(self, i): del self.list[i]
+
+    def __setitem__(self, i, v: pgpy.PGPKey):
+        self.check(v)
+        self.list[i] = bytes(copy.copy(v))
+
+    def insert(self, i, v: pgpy.PGPKey):
+        self.check(v)
+        self.list.insert(i, bytes(copy.copy(v)))
+
+    def __str__(self):
+        return str(self.list)
+
+
 class PillarPGPKey(PillarDBObject):
     model = Key
 
@@ -71,10 +104,12 @@ class PillarPGPKey(PillarDBObject):
         self.key = bytes(key)
 
     @classmethod
-    def get_keys(cls, command_queue: pmp.Queue, output_queue: pmp.Queue):
+    def get_keys(cls,
+                 command_queue: pmp.Queue,
+                 output_queue: pmp.Queue) -> SerializingKeyList:
         instances = cls.load_all_from_db(command_queue, output_queue, [
                                          command_queue, output_queue])
-        ret = []
+        ret = SerializingKeyList()
 
         for instance in instances:
             key, o = pgpy.PGPKey.from_blob(instance.key)
@@ -410,7 +445,10 @@ class KeyManager(PillarDBObject,
 
     @ key_manager_methods.register_method
     def get_keys(self):
-        keys = []
+        return PillarPGPKey.get_keys(
+            self.command_queue, self.output_queue)
+
+        keys = SerializingKeyList()
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
                 keys.append(key)
