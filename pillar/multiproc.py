@@ -150,9 +150,8 @@ class PillarWorkerThread(pmp.Process):
                                 **kwargs
                             )
 
-                        if type(output) in [pgpy.PGPKey, pgpy.PGPMessage]:
+                        if isinstance(output, pgpy.PGPKey):
                             keyblob = str(copy.copy(output))
-                            time.sleep(2)
                             self.output_queue.put(
                                 {command.id: {'PGPKey': keyblob}}
                             )
