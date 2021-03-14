@@ -82,7 +82,6 @@ class TestEmptyKeyManager(TestCase):
     def setUp(self, *args):
         self.config = PillardConfig(config_directory="/this/shouldnt/exist")
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
-        self.km.start()
 
     def test_instantiate_keymanager_class(self):
         assert(isinstance(self.km, KeyManager))
