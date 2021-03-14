@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 
 
 class TestPillarDB(TestCase):
@@ -13,7 +13,7 @@ class TestPillarDB(TestCase):
     @patch.object(PillarDBWorker, '_get_engine')
     def test_engine_creation(self, mock_func):
         config = PillardConfig()
-        manager = pmp.Manager()
+        manager = mp.Manager()
         command_queue = manager.Queue()
         output_queue = manager.Queue()
         db = PillarDBWorker(config, command_queue, output_queue)

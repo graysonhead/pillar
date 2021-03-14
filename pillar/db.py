@@ -16,7 +16,7 @@ from sqlalchemy.orm.properties import ColumnProperty
 from .config import PillardConfig
 from pgpy import PGPKeyring, PGPKey
 from contextlib import contextmanager
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 import logging
 
 pillar_db_register = PillarThreadMethodsRegister()
@@ -189,8 +189,8 @@ class PillarDBWorker(PillarWorkerThread):
 
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.db_uri = self._get_sqlite_uri(config.get_value('db_path'))
         self.engine = self._get_engine(self.db_uri)
         self.session_constructor = sessionmaker(bind=self.engine)
@@ -252,7 +252,7 @@ class DBInterface(DBMixIn,
 class PillarDBObject:
     model = None
 
-    def __init__(self, command_queue: pmp.Queue, output_queue: pmp.Queue):
+    def __init__(self, command_queue: mp.Queue, output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.db_interface = self.get_db_interface()
@@ -288,8 +288,8 @@ class PillarDBObject:
 
     @classmethod
     def _load_model_instances_from_db(cls,
-                                      command_queue: pmp.Queue,
-                                      output_queue: pmp.Queue,
+                                      command_queue: mp.Queue,
+                                      output_queue: mp.Queue,
                                       expunge: bool = True,
                                       return_interface=False):
         temp_interface = DBInterface(cls.__name__,
@@ -320,8 +320,8 @@ class PillarDBObject:
 
     @classmethod
     def load_all_from_db(cls,
-                         command_queue: pmp.Queue,
-                         output_queue: pmp.Queue,
+                         command_queue: mp.Queue,
+                         output_queue: mp.Queue,
                          init_args: list = None,
                          init_kwargs: dict = None,
                          expunge: bool = True,):

@@ -8,8 +8,7 @@ import inspect
 import signal
 import traceback
 from uuid import uuid4
-# from pathos.helpers import mp as pmp
-import multiprocessing as pmp
+import multiprocessing as mp
 import pgpy
 import copy
 
@@ -87,7 +86,7 @@ class PillarThreadCommandCallable:
                                             *args, **kwargs)
 
 
-class PillarWorkerThread(pmp.Process):
+class PillarWorkerThread(mp.Process):
     """
     This class is inherited by the worker threads that will process requests
     Any methods added to the registry via decorator will be callable by
@@ -107,8 +106,8 @@ class PillarWorkerThread(pmp.Process):
     methods_register = None
 
     def __init__(self,
-                 command_queue: pmp.Queue = None,
-                 output_queue: pmp.Queue = None):
+                 command_queue: mp.Queue = None,
+                 output_queue: mp.Queue = None):
         self.loop = None
         if command_queue:
             self.command_queue = command_queue
@@ -117,7 +116,7 @@ class PillarWorkerThread(pmp.Process):
         super().__init__()
         if not hasattr(self, "logger"):
             self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
-        self.shutdown_callback = pmp.Event()
+        self.shutdown_callback = mp.Event()
 
     async def run_queue_commands(self):
         """
@@ -217,8 +216,8 @@ class PillarThreadInterface:
     def __init__(self,
                  queue_thread_class: PillarWorkerThread,
                  parent_class_name: str,
-                 command_queue: pmp.Queue = None,
-                 output_queue: pmp.Queue = None,
+                 command_queue: mp.Queue = None,
+                 output_queue: mp.Queue = None,
                  ):
         self.command_queue = command_queue
         self.output_queue = output_queue
@@ -311,8 +310,8 @@ class PillarThreadMixIn:
                  interface_name,
                  queue_thread_class,
                  parent_class_name,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         setattr(self,
                 interface_name,
                 PillarThreadInterface(
@@ -330,8 +329,8 @@ class MixedClass(type):
 
         def __init__(self,
                      parent_class_name: str,
-                     command_queue: pmp.Queue = None,
-                     output_queue: pmp.Queue = None, *args, **kwargs):
+                     command_queue: mp.Queue = None,
+                     output_queue: mp.Queue = None, *args, **kwargs):
             for base in type(self).__bases__:
                 if issubclass(base, PillarThreadMixIn):
                     base.__init__(self, base.interface_name,

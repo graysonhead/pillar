@@ -8,7 +8,7 @@ from ..keymanager import EncryptionHelper, KeyManagerCommandQueueMixIn,\
     PillarKeyType
 from ..ipfs import IPFSMixIn
 from ..config import PillardConfig
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 
 cid_messenger_register = PillarThreadMethodsRegister()
 
@@ -24,8 +24,8 @@ class CIDMessenger(PillarWorkerThread):
     def __init__(self,
                  pillar_key_type: PillarKeyType,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue
                  ):
         self.command_queue = command_queue
         self.output_queue = output_queue

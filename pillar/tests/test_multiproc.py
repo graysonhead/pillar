@@ -14,7 +14,7 @@ from ..multiproc import PillarThreadMethodsRegister, \
     QueueCommand, \
     MixedClass
 from multiprocessing import Queue, Event
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 
 test_class_register = PillarThreadMethodsRegister()
 test_class_2_register = PillarThreadMethodsRegister()
@@ -140,7 +140,7 @@ class TestPillarQueueInterface(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
-        manager = pmp.Manager()
+        manager = mp.Manager()
         self.command_queue = manager.Queue()
         self.output_queue = manager.Queue()
         self.interface = TestClassMixIn(TestClassMixIn.interface_name,
@@ -183,7 +183,7 @@ class TestMultipleMixInInterfacesOnSameClass(asynctest.TestCase):
     def setUp(self) -> None:
         self.test_class_instance = TestClass()
         self.test_class_instance_2 = TestClass2()
-        self.manager = pmp.Manager()
+        self.manager = mp.Manager()
         self.command_queue = self.manager.Queue()
         self.output_queue = self.manager.Queue()
         self.fake_plugin = MultipleMixInInterfaces(
@@ -233,7 +233,7 @@ class MQRInterface(TestMQRMixIn,
 class TestMQR(asynctest.TestCase):
 
     def setUp(self) -> None:
-        manager = pmp.Manager()
+        manager = mp.Manager()
         self.command_queue = manager.Queue()
         self.output_queue = manager.Queue()
         self.worker = TestMQRWorker(command_queue=self.command_queue,

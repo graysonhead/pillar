@@ -16,8 +16,7 @@ from enum import Enum
 from uuid import uuid4
 import os
 import logging
-# from pathos.helpers import mp as pmp
-import multiprocessing as pmp
+import multiprocessing as mp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
 import copy
@@ -105,8 +104,8 @@ class PillarPGPKey(PillarDBObject):
 
     @classmethod
     def get_keys(cls,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue) -> SerializingKeyList:
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue) -> SerializingKeyList:
         instances = cls.load_all_from_db(command_queue, output_queue, [
                                          command_queue, output_queue])
         ret = SerializingKeyList()
@@ -135,8 +134,8 @@ class KeyManager(PillarDBObject,
 
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.logger = logging.getLogger('<KeyManager>')
         self.command_queue = command_queue
         self.output_queue = output_queue
@@ -167,8 +166,8 @@ class KeyManager(PillarDBObject,
     @classmethod
     def get_local_instance(cls,
                            config: PillardConfig,
-                           command_queue: pmp.Queue,
-                           output_queue: pmp.Queue):
+                           command_queue: mp.Queue,
+                           output_queue: mp.Queue):
         return cls.load_all_from_db(command_queue,
                                     output_queue,
                                     init_args=[config,
@@ -219,9 +218,7 @@ class KeyManager(PillarDBObject,
                 key = PillarPGPKey(self.command_queue, self.output_queue)
                 key.load_pgpy_key(peer_key)
                 key.pds_save()
-            print(peer_key.subkeys)
             for k in peer_key.subkeys:
-                print(f"loading node subkey {k}")
                 self.peer_subkey_map.update(
                     {k: peer_key.fingerprint})
             return peer_key.fingerprint
@@ -534,8 +531,8 @@ class EncryptionHelper:
     """
 
     def __init__(self, keytype: PillarKeyType,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.logger = logging.getLogger(
             f'<{self.__class__.__name__}>')
         self.keytype = keytype

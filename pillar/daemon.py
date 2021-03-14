@@ -7,8 +7,8 @@ from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
 from .keymanager import EncryptionHelper
 from .IPRPC.channel import IPRPCChannel
-# from pathos.helpers import mp as pmp
-import multiprocessing as pmp
+
+import multiprocessing as mp
 
 import logging
 import multiprocessing
@@ -70,8 +70,8 @@ class ProcessManager:
 class IPFSWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.config = config
@@ -103,8 +103,8 @@ class IPFSWorkerManager(ProcessManager):
 class DBWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.config = config
@@ -128,8 +128,8 @@ class NodeWorkerManager(ProcessManager):
 
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue,
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue,
                  bootstrap: bool = False):
         self.bootstrap = bootstrap
         self.command_queue = command_queue
@@ -159,8 +159,8 @@ class NodeWorkerManager(ProcessManager):
 class KeyManagerWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue,
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue,
                  bootstrap: bool = False):
         self.command_queue = command_queue
         self.output_queue = output_queue
@@ -192,8 +192,8 @@ class CidMessengerWorkerManager(ProcessManager):
 
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.config = config
@@ -222,8 +222,8 @@ class ChannelManager(ProcessManager):
 
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.interface = ChannelManagerInterface(str(self),
@@ -263,7 +263,7 @@ class PillarDaemon:
                  config: PillardConfig,
                  bootstrap: bool = False):
         self.bootstrap = bootstrap
-        self.queue_manager = pmp.Manager()
+        self.queue_manager = mp.Manager()
         self.shared_command_queue = self.queue_manager.Queue()
         self.shared_output_queue = self.queue_manager.Queue()
         self.stop_signal = multiprocessing.Event()

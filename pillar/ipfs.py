@@ -2,7 +2,7 @@ import aioipfs
 from .multiproc import PillarThreadMixIn, \
     PillarThreadMethodsRegister, \
     PillarWorkerThread
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 import logging
 
 ipfs_worker_register = PillarThreadMethodsRegister()
@@ -56,8 +56,8 @@ class IPFSWorker(PillarWorkerThread):
     methods_register = ipfs_worker_register
 
     def __init__(self,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue,
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue,
                  ipfs_client: IPFSClient = None):
         self.command_queue = command_queue
         self.output_queue = output_queue

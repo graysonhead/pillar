@@ -12,7 +12,7 @@ from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
 import logging
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 
 
 class IdentityInterface(KeyManagerCommandQueueMixIn,
@@ -25,8 +25,8 @@ class LocalIdentity(PillarDBObject,
                     PillarWorkerThread):
     def __init__(self,
                  config: PillardConfig,
-                 command_queue: pmp.Queue,
-                 output_queue: pmp.Queue):
+                 command_queue: mp.Queue,
+                 output_queue: mp.Queue):
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
@@ -108,8 +108,8 @@ class LocalIdentity(PillarDBObject,
     @classmethod
     def get_local_instance(cls,
                            config: PillardConfig,
-                           command_queue: pmp.Queue,
-                           output_queue: pmp.Queue):
+                           command_queue: mp.Queue,
+                           output_queue: mp.Queue):
         return cls.load_all_from_db(command_queue,
                                     output_queue,
                                     init_args=[config,
@@ -126,7 +126,7 @@ class Primary(LocalIdentity):
 
     def __init__(self, *args):
         self.key_type = PillarKeyType.USER_PRIMARY_KEY
-        pmp.Process.__init__(self)
+        mp.Process.__init__(self)
         super().__init__(*args)
 
     @ primary_identity_methods.register_method
@@ -195,7 +195,7 @@ class Node(IdentityWithChannel):
         self.key_type = PillarKeyType.NODE_SUBKEY
         self.fingerprint = fingerprint
         self.fingerprint_cid = fingerprint_cid
-        pmp.Process.__init__(self)
+        mp.Process.__init__(self)
         super().__init__(*args)
 
     @node_identity_methods.register_method

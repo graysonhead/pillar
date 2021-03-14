@@ -7,7 +7,7 @@ from ..daemon import ProcessManager, \
     NodeWorkerManager
 from ..config import PillardConfig
 import asynctest
-from pathos.helpers import mp as pmp
+import multiprocessing as mp
 
 
 class TestProcessManagerBase(TestCase):
@@ -101,7 +101,7 @@ class TestIPFSWorkerManager(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        manager = pmp.Manager()
+        manager = mp.Manager()
         command_queue = manager.Queue()
         output_queue = manager.Queue()
         self.pm = IPFSWorkerManager(self.config, command_queue, output_queue)
@@ -125,7 +125,7 @@ class TestDBWorkerManager(TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        manager = pmp.Manager()
+        manager = mp.Manager()
         command_queue = manager.Queue()
         output_queue = manager.Queue()
         self.pm = DBWorkerManager(self.config, command_queue, output_queue)
@@ -147,7 +147,7 @@ class TestNodeWorkerManager(asynctest.TestCase):
 
     def setUp(self) -> None:
         self.config = PillardConfig()
-        manager = pmp.Manager()
+        manager = mp.Manager()
         command_queue = manager.Queue()
         output_queue = manager.Queue()
         NodeWorkerManager.initialize_processes = MagicMock()
