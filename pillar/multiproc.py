@@ -7,7 +7,6 @@ import time
 import inspect
 import signal
 import traceback
-import signal
 from uuid import uuid4
 # from pathos.helpers import mp as pmp
 import multiprocessing as pmp

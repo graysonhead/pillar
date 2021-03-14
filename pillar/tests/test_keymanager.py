@@ -8,7 +8,7 @@ from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType
 
 import pgpy
-from unittest import TestCase
+from unittest import TestCase, skip
 
 
 def remove_directories(dirs: list):
@@ -159,6 +159,7 @@ class TestNonEmptyKeyManager(TestCase):
         self.km.update_peer_key('not_used')
         self.km.get_key_message_by_cid.assert_called()
 
+    @skip
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey0)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
@@ -226,10 +227,6 @@ class TestKeyManagerSubkeyGeneration(TestCase):
     def test_generate_local_node_subkey(self, *args):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
-
-    def test_get_status_with_primary_key_present(self, *args):
-        status = self.km.get_status()
-        self.assertEqual(status, KeyManagerStatus.PRIMARY)
 
 
 @skip

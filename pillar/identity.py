@@ -4,12 +4,10 @@ from .db import PillarDBObject, NodeIdentity, \
     PrimaryIdentity
 from .keymanager import PillarKeyType, EncryptionHelper,\
     KeyManagerCommandQueueMixIn
-from .exceptions import WrongMessageType
-from .IPRPC.cid_messenger import CIDMessengerMixIn
 from .config import PillardConfig
 
-from .exceptions import WrongMessageType, WontUpdateToStaleKey
-from .IPRPC.cid_messenger import CIDMessenger, CIDMessengerMixIn
+from .exceptions import WrongMessageType
+from .IPRPC.cid_messenger import CIDMessengerMixIn
 from .IPRPC.channel import ChannelManager
 from .IPRPC.messages import InvitationMessage, FingerprintMessage
 from uuid import uuid4
