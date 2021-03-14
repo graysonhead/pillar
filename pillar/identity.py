@@ -95,8 +95,6 @@ class LocalIdentity(PillarDBObject,
             get_unencrypted_message_from_cid(fingerprint_cid)
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
-        print("identity; _get_info_from_fingerprint_cid")
-        print(fingerprint_info.__dict__)
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
@@ -143,7 +141,6 @@ class Primary(LocalIdentity):
         self.fingerprint = self.key.fingerprint
         self.bootstrap_node()
         self.public_key_cid = self.node.public_key_cid
-        print(f"Public key cid: {self.public_key_cid}")
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.pds_save()
         self.logger.info(

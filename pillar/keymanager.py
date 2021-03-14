@@ -201,7 +201,6 @@ class KeyManager(PillarDBObject,
 
         self.logger.info("Loading peer keys from database")
         for key in peer_keys:
-            print(key)
             self.import_peer_key(key, persist=False)
 
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
@@ -220,7 +219,9 @@ class KeyManager(PillarDBObject,
                 key = PillarPGPKey(self.command_queue, self.output_queue)
                 key.load_pgpy_key(peer_key)
                 key.pds_save()
+            print(peer_key.subkeys)
             for k in peer_key.subkeys:
+                print(f"loading node subkey {k}")
                 self.peer_subkey_map.update(
                     {k: peer_key.fingerprint})
             return peer_key.fingerprint
@@ -434,7 +435,6 @@ class KeyManager(PillarDBObject,
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
         self.user_primary_key_cid = data['Hash']
-        print(self.user_primary_key_cid)
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
@@ -457,8 +457,6 @@ class KeyManager(PillarDBObject,
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
                 keys.append(key)
-        print("in key manager get_keys")
-        print(keys)
         return keys
 
     @ key_manager_methods.register_method
@@ -486,16 +484,11 @@ class KeyManager(PillarDBObject,
 
     @ key_manager_methods.register_method
     def get_user_primary_key_cid(self):
-        print(self.user_primary_key_cid)
         return self.user_primary_key_cid
 
     @ key_manager_methods.register_method
     def bootstrap_node(self, name: str, email: str):
         self.node.bootstrap(name, email)
-
-    @ key_manager_methods.register_method
-    def printer(self, msg: str):
-        print(msg)
 
 
 class QueueCommand:
@@ -559,12 +552,9 @@ class EncryptionHelper:
                                                     remote_fingerprint: str):
         remote_keyid = Fingerprint.__new__(
             Fingerprint, remote_fingerprint).keyid
-        print(remote_fingerprint)
 
-        print("in encryption helper")
         peer_key = self.interface.key_manager.\
             get_peer_primary_key_from_subkey_fingerprint(remote_keyid)
-        print("eh?")
 
         peer_subkey = None
         for _, key in peer_key._children.items():
