@@ -10,7 +10,6 @@ import traceback
 from uuid import uuid4
 import multiprocessing as mp
 import pgpy
-import copy
 
 
 class DebugWDT(Process):
