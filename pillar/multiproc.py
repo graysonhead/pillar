@@ -149,7 +149,7 @@ class PillarWorkerThread(mp.Process):
                             )
 
                         if isinstance(output, pgpy.PGPKey):
-                            keyblob = str(copy.copy(output))
+                            keyblob = bytes(output)
                             self.output_queue.put(
                                 {command.id: {'PGPKey': keyblob}}
                             )

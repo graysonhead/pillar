@@ -404,6 +404,7 @@ class KeyManager(PillarDBObject,
 
         self.write_local_privkey(
             key, PillarKeyType.NODE_SUBKEY)
+        self.load_keytype(PillarKeyType.NODE_SUBKEY)
 
         self.user_primary_key.add_subkey(
             key,
@@ -415,7 +416,6 @@ class KeyManager(PillarDBObject,
 
         cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.set_user_primary_key_cid(cid)
-        self.node_subkey = key
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
