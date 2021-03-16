@@ -19,7 +19,6 @@ import logging
 import multiprocessing as mp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
-import copy
 
 
 class PillarKeyType(Enum):
