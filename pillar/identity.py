@@ -150,11 +150,10 @@ class Primary(LocalIdentity):
                          self.command_queue,
                          self.output_queue)
 
-        self.id_interface.key_manager.generate_local_node_subkey()
+        key = self.id_interface.key_manager.generate_local_node_subkey()
 
-        self.node.fingerprint = self.id_interface.key_manager.\
-            get_private_key_for_key_type(
-                PillarKeyType.NODE_SUBKEY).fingerprint
+        self.node.fingerprint = key.fingerprint
+
         self.node.public_key_cid = self.id_interface.\
             key_manager.get_user_primary_key_cid()
         self.node.fingerprint_cid = self.node.create_fingerprint_cid()

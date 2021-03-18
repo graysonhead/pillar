@@ -19,6 +19,7 @@ import logging
 import multiprocessing as mp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
+import copy
 
 
 class PillarKeyType(Enum):
@@ -391,10 +392,7 @@ class KeyManager(PillarDBObject,
             ciphers=KeyOptions.ciphers,
             compression=KeyOptions.compression)
 
-        for u in self.user_primary_key.pubkey.userids:
-            if u.name == self.node_uuid:
-                key.add_uid(
-                    u,
+        key.add_uid(uid,
                     selfsign=True,
                     usage=KeyOptions.usage,
                     hashes=KeyOptions.hashes,
@@ -403,10 +401,9 @@ class KeyManager(PillarDBObject,
 
         self.write_local_privkey(
             key, PillarKeyType.NODE_SUBKEY)
-        self.load_keytype(PillarKeyType.NODE_SUBKEY)
 
         self.user_primary_key.add_subkey(
-            key,
+            copy.copy(key),
             usage=KeyOptions.usage)
 
         self.user_primary_key._signatures.pop()
@@ -415,6 +412,8 @@ class KeyManager(PillarDBObject,
 
         cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.set_user_primary_key_cid(cid)
+
+        return key
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
@@ -575,7 +574,7 @@ class EncryptionHelper:
 
         signer = unverified_message.signers.pop()
 
-        peer_pubkey = self.interface.key_manager.\
+        peer_pubkey = self.interface.key_manager. \
             get_peer_primary_key_from_subkey_fingerprint(signer)
 
         if peer_pubkey.verify(unverified_message):
