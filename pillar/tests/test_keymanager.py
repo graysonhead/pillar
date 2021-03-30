@@ -97,6 +97,15 @@ class TestEmptyKeyManager(TestCase):
         self.km.get_key_message_by_cid.assert_called_with(fake_cid)
         self.km.import_peer_key.assert_called_with(key)
 
+    @patch('pillar.keymanager.KeyManager.import_peer_key_from_cid',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.update_peer_key',
+           new_callable=MagicMock)
+    def test_import_or_update_peer_key(self, *args):
+        fake_cid = 'string'
+        self.km.import_or_update_peer_key(fake_cid)
+        self.km.import_peer_key_from_cid.assert_called()
+
     @patch('pillar.keymanager.KeyManager.key_already_in_keyring',
            new_callable=FalseyMock)
     @patch('pillar.keymanager.PillarPGPKey',
@@ -157,6 +166,15 @@ class TestNonEmptyKeyManager(TestCase):
     def test_update_peer_key(self, *args, **kwargs):
         self.km.update_peer_key('not_used')
         self.km.get_key_message_by_cid.assert_called()
+
+    @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
+            new_callable=mock_pubkey2)
+    @patch('pillar.keymanager.KeyManager.update_peer_key',
+           new_callable=MagicMock)
+    def test_import_or_update_peer_key(self, *args):
+        fake_cid = 'string'
+        self.km.import_or_update_peer_key(fake_cid)
+        self.km.update_peer_key.assert_called()
 
     @skip
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
