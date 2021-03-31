@@ -5,7 +5,8 @@ import os
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 from ..config import PillardConfig
-from ..keymanager import KeyManager, KeyOptions, PillarKeyType
+from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
+    SerializingKeyList
 
 import pgpy
 from unittest import TestCase, skip
@@ -31,21 +32,18 @@ class FalseyMock(MagicMock):
         return False
 
 
-class mock_new_pgp_public_key(MagicMock):
-    def __call__(self, *args, **kwargs) -> pgpy.PGPKey:
-        super().__call__(*args, **kwargs)
-
-        uid = pgpy.PGPUID.new(
-            'Mock User',
-            comment='none',
-            email='noreply@pillarcloud.org')
-        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-        key.add_uid(uid,
-                    usage=KeyOptions.usage,
-                    hashes=KeyOptions.hashes,
-                    ciphers=KeyOptions.ciphers,
-                    compression=KeyOptions.compression)
-        return key
+def mock_new_pgp_public_key():
+    uid = pgpy.PGPUID.new(
+        'Mock User',
+        comment='none',
+        email='noreply@pillarcloud.org')
+    key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+    key.add_uid(uid,
+                usage=KeyOptions.usage,
+                hashes=KeyOptions.hashes,
+                ciphers=KeyOptions.ciphers,
+                compression=KeyOptions.compression)
+    return key
 
 
 class MockPGPKeyFromFile(MagicMock):
@@ -265,3 +263,25 @@ class TestKeyManagerDBOperations(TestCase):
     @skip
     def test_import_peers_keys_from_database(self, *args):
         self.km.import_peer_keys_from_database()
+
+
+def returns_a_list_of_PillarPGPKeys(*args, **kwargs):
+    k = PillarPGPKey(MagicMock(), MagicMock())
+    k.load_pgpy_key(mock_new_pgp_public_key())
+    return [k]
+
+
+class TestPillarPGPKey(TestCase):
+    def setUp(self, *args):
+        self.ppgpk = PillarPGPKey(MagicMock(), MagicMock())
+
+    def test_load_pgpy_key(self):
+        k = mock_new_pgp_public_key()
+        self.ppgpk.load_pgpy_key(k)
+        self.assertEqual(k.fingerprint, self.ppgpk.fingerprint)
+
+    @patch('pillar.db.PillarDBObject.load_all_from_db',
+           returns_a_list_of_PillarPGPKeys)
+    def test_get_keys(self):
+        out = PillarPGPKey.get_keys(MagicMock(), MagicMock())
+        self.assertTrue(isinstance(out, SerializingKeyList))
