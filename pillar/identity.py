@@ -61,12 +61,12 @@ class LocalIdentity(PillarDBObject,
         self.logger.info(f'Receiving invitation from cid: {cid}')
         invitation = self.id_interface.cid_messenger.\
             get_and_decrypt_message_from_cid(cid, verify=False)
-        peer_fingerprint = self.id_interface.key_manager.\
-            import_or_update_peer_key(invitation.public_key_cid)
         if not type(invitation) is InvitationMessage:
             raise WrongMessageType(type(invitation))
-        key = self.id_interface.key_manager.get_key_from_keyring(  # noqa
-            peer_fingerprint)
+        peer_fingerprint = self.id_interface.key_manager.\
+            import_or_update_peer_key(invitation.public_key_cid)
+#        key = self.id_interface.key_manager.get_key_from_keyring(  # noqa
+#            peer_fingerprint)
 
     def create_invitation(self, peer_fingerprint_cid):
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(
