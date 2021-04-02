@@ -14,6 +14,7 @@ from .multiproc import PillarWorkerThread, \
     PillarThreadMixIn, MixedClass
 from enum import Enum
 from uuid import uuid4
+import copy
 import os
 import logging
 import multiprocessing as mp
