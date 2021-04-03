@@ -1,8 +1,7 @@
 import asynctest
 from ..async_untils import handler_loop
-from unittest import skip
 
-@skip
+
 class TestHandlerLoop(asynctest.TestCase):
 
     async def test_handler_loop(self):
