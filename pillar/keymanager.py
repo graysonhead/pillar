@@ -14,12 +14,12 @@ from .multiproc import PillarWorkerThread, \
     PillarThreadMixIn, MixedClass
 from enum import Enum
 from uuid import uuid4
-import copy
 import os
 import logging
 import multiprocessing as mp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
+import copy
 
 
 class PillarKeyType(Enum):
@@ -202,6 +202,11 @@ class KeyManager(PillarDBObject,
         for key in peer_keys:
             self.import_peer_key(key, persist=False)
 
+    def save_key(self, key: pgpy.PGPKey):
+        k = PillarPGPKey(self.command_queue, self.output_queue)
+        k.load_pgpy_key(key)
+        k.pds_save()
+
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
         """
         Import a new key into the keyring and, optionally (if persist is
@@ -215,9 +220,8 @@ class KeyManager(PillarDBObject,
                 f"Importing new public key {peer_key.fingerprint}")
             self.keyring.load(peer_key)
             if persist:
-                key = PillarPGPKey(self.command_queue, self.output_queue)
-                key.load_pgpy_key(peer_key)
-                key.pds_save()
+                self.save_key(peer_key)
+
             for k in peer_key.subkeys:
                 self.peer_subkey_map.update(
                     {k: peer_key.fingerprint})
@@ -244,6 +248,7 @@ class KeyManager(PillarDBObject,
             raise KeyNotVerified
 
         self.keyring.load(new_key)
+        self.save_key(new_key)
         return new_key.fingerprint
 
     def key_already_in_keyring(self, identifier) -> bool:
@@ -444,10 +449,10 @@ class KeyManager(PillarDBObject,
         return val
 
     @ key_manager_methods.register_method
-    def get_keys(self):
-        return PillarPGPKey.get_keys(
-            self.command_queue, self.output_queue)
-
+    def get_keys(self) -> SerializingKeyList:
+        """
+        Returns the keys in KeyManager's keyring.
+        """
         keys = SerializingKeyList()
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:

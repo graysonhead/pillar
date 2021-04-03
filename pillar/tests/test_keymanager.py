@@ -46,15 +46,29 @@ def mock_new_pgp_public_key():
     return key
 
 
-class MockPGPKeyFromFile(MagicMock):
-    key_path = './data/pub.key'
+def load_key_message_from_file(key_path='./data/pubkey0.msgkey'):
+    m = pgpy.PGPMessage.from_file(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     key_path))
+    return m
 
+
+def get_deencapsulated_pillar_pgp_key():
+    """
+    From the valid pillar key loaded from file in mock_pubkey0,
+    this convenience function deencapsulates the pgp key from the
+    pgp message and returns it.
+    """
+    keymsg = load_key_message_from_file()
+    key, o = pgpy.PGPKey.from_blob(keymsg.message)
+    return key
+
+
+class MockPGPKeyFromFile(MagicMock):
     def __call__(self, *args, **kwargs) -> pgpy.PGPMessage:
         super().__call__(*args, **kwargs)
-        m = pgpy.PGPMessage.from_file(
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         self.key_path))
-        return m
+
+        return load_key_message_from_file(key_path=self.key_path)
 
 
 class mock_pubkey0(MockPGPKeyFromFile):
@@ -285,3 +299,63 @@ class TestPillarPGPKey(TestCase):
     def test_get_keys(self):
         out = PillarPGPKey.get_keys(MagicMock(), MagicMock())
         self.assertTrue(isinstance(out, SerializingKeyList))
+
+
+class TestNonEmptySerializingKeyList(TestCase):
+    def setUp(self):
+        self.skl = SerializingKeyList()
+        self.key = mock_new_pgp_public_key()
+        self.skl.append(self.key)
+
+    def test___delitem__(self):
+        self.skl.pop()
+        self.assertEqual(len(self.skl), 0)
+
+    def test___getitem__(self):
+        k = self.skl.pop()
+        assert(isinstance(k, pgpy.PGPKey))
+        self.assertEqual(k.fingerprint, self.key.fingerprint)
+
+
+class TestEmptySerializingKeyList(TestCase):
+    def setUp(self):
+        self.skl = SerializingKeyList()
+
+    def test_check_raises(self):
+        with self.assertRaises(TypeError):
+            self.skl.check('')
+
+    def test_check_passes(self):
+        self.skl.check(mock_new_pgp_public_key())
+        assert(True)
+
+    def test___setitem__(self):
+        k = mock_new_pgp_public_key()
+        self.skl.append(k)
+        self.skl[0] = k
+        self.assertEqual(k.fingerprint, self.skl.pop().fingerprint)
+
+    def test___str__(self):
+        assert(isinstance(self.skl.__str__(), str))
+
+
+class TestSerializingKeyListKeyAttrs(TestCase):
+    """
+    These tests are made to ensure that key attributes remain intact
+    throughout the serializing key list's processes.
+    Therefore, we use get_deencapsulated_pillar_pgp_key method in this
+    class since it contains subkeys.
+    """
+
+    def setUp(self):
+        self.skl = SerializingKeyList()
+        self.key = get_deencapsulated_pillar_pgp_key()
+        self.skl.append(self.key)
+
+    def test_metatest_ensure_there_are_subkeys(self):
+        assert(len(self.key.subkeys.keys()) > 0)
+
+    def test_subkeys_survive_list(self):
+        k = self.skl.pop()
+        self.assertEqual(len(k.subkeys.keys()),
+                         len(self.key.subkeys.keys()))
