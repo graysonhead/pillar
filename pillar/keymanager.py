@@ -14,12 +14,12 @@ from .multiproc import PillarWorkerThread, \
     PillarThreadMixIn, MixedClass
 from enum import Enum
 from uuid import uuid4
-import copy
 import os
 import logging
 import multiprocessing as mp
 from .ipfs import IPFSMixIn
 from .db import DBMixIn
+import copy
 
 
 class PillarKeyType(Enum):
@@ -449,10 +449,10 @@ class KeyManager(PillarDBObject,
         return val
 
     @ key_manager_methods.register_method
-    def get_keys(self):
-        return PillarPGPKey.get_keys(
-            self.command_queue, self.output_queue)
-
+    def get_keys(self) -> SerializingKeyList:
+        """
+        Returns the keys in KeyManager's keyring.
+        """
         keys = SerializingKeyList()
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:

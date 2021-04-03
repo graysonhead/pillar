@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
-from pillar.config import PillardConfig
-from pillar.keymanager import KeyManager
+from ..config import PillardConfig
+from ..keymanager import KeyManager
 
 
 class Namespace:
