@@ -344,7 +344,7 @@ class TestSerializingKeyListKeyAttrs(TestCase):
     These tests are made to ensure that key attributes remain intact
     throughout the serializing key list's processes.
     Therefore, we use get_deencapsulated_pillar_pgp_key method in this
-    class since it contains subkeys. 
+    class since it contains subkeys.
     """
 
     def setUp(self):

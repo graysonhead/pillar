@@ -206,7 +206,7 @@ class KeyManager(PillarDBObject,
         k = PillarPGPKey(self.command_queue, self.output_queue)
         k.load_pgpy_key(key)
         k.pds_save()
-        
+
     def import_peer_key(self, peer_key: pgpy.PGPKey, persist=True):
         """
         Import a new key into the keyring and, optionally (if persist is
