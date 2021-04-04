@@ -257,6 +257,16 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
 
+    @patch('pillar.keymanager.KeyManager.pds_save',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+           new_callable=MagicMock)
+    def test_generate_local_node_subkey_same_node_uuid(self, *args):
+        import copy
+        orig = copy.copy(self.km.node_uuid)
+        self.km.generate_local_node_subkey()
+        self.assertEqual(orig, self.km.node_uuid)
+
 
 @skip
 class TestKeyManagerDBOperations(TestCase):
