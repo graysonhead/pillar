@@ -380,7 +380,6 @@ class KeyManager(PillarDBObject,
         This method creates the initial  subkey during the bootstrap
         process using the user primary key.
         """
-        self.node_uuid = str(uuid4())
         self.pds_save()
 
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
