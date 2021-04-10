@@ -171,6 +171,11 @@ class TestNonEmptyKeyManager(TestCase):
 
         self.km.import_peer_key_from_cid('not_used')
 
+    def test_get_keys_assert_primary(self):
+        skl = self.km.get_keys()
+        for k in skl:
+            assert(k.is_primary)
+
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey2)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
