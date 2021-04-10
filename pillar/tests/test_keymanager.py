@@ -350,6 +350,14 @@ class TestEmptySerializingKeyList(TestCase):
         self.skl[0] = k
         self.assertEqual(k.fingerprint, self.skl.pop().fingerprint)
 
+    def test_check_raises_for_non_primary(self):
+        """
+        non-primary keys are disallowed since they can't be deserialized.
+        """
+        with self.assertRaises(TypeError):
+            for o, k in get_deencapsulated_pillar_pgp_key().subkeys.items():
+                self.skl.append(k)
+
     def test___str__(self):
         assert(isinstance(self.skl.__str__(), str))
 

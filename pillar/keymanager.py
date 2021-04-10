@@ -63,8 +63,16 @@ class SerializingKeyList(collections.MutableSequence):
         self.extend(list(args))
 
     def check(self, key: pgpy.PGPKey):
+        """
+        ensures that added items are pgpy PGPKey objects.
+        Also checks that they're primary since loading extracted
+        subkeys raises a parse error in pgpy.
+        """
         if not isinstance(key, pgpy.PGPKey):
             raise TypeError(f"wrong type {type(key)}; should be pgpy.PGPKey")
+        else:
+            if not key.is_primary:
+                raise TypeError("Key must be primary")
 
     def __len__(self): return len(self.list)
 
