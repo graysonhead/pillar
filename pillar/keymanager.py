@@ -455,7 +455,8 @@ class KeyManager(PillarDBObject,
         keys = SerializingKeyList()
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
-                keys.append(key)
+                if key.is_primary:
+                    keys.append(key)
         return keys
 
     @ key_manager_methods.register_method
