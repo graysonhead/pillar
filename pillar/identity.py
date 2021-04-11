@@ -53,7 +53,6 @@ class LocalIdentity(PillarDBObject,
                                                   self.command_queue,
                                                   self.output_queue)
 
-
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
         invitation = self.id_interface.cid_messenger.\
