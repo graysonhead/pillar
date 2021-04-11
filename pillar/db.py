@@ -45,14 +45,12 @@ class Key(Base):
 
 class PrimaryIdentity(Base):
     __tablename__ = "primary_identities"
-#    public_key_cid = Column(String, primary_key=True)
     fingerprint = Column(String, primary_key=True)
 
 
 class NodeIdentity(Base):
     __tablename__ = "node_identities"
     id = Column(Integer, primary_key=True)
-#    public_key_cid = Column(String)
     fingerprint = Column(String)
     fingerprint_cid = Column(String)
 
