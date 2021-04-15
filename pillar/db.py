@@ -43,28 +43,20 @@ class Key(Base):
     invitation = relationship("Invitation", back_populates='key')
 
 
-class PrimaryIdentity(Base):
-    __tablename__ = "primary_identities"
-    fingerprint = Column(String, primary_key=True)
-
-
-class NodeIdentity(Base):
-    __tablename__ = "node_identities"
-    id = Column(Integer, primary_key=True)
-    fingerprint = Column(String)
-    fingerprint_cid = Column(String)
-
-
 class Invitation(Base):
     __tablename__ = 'invitations'
     id = Column(Integer, primary_key=True)
     key = relationship("Key", uselist=False, back_populates='invitation')
 
 
-class KeyManagerData(Base):
-    __tablename__ = 'key_manager'
-    node_uuid = Column(String, primary_key=True)
+class KeyManagerDataModel(Base):
+    __tablename__ = 'key_manager_data'
+    id = Column(Integer, primary_key=True)
+    node_uuid = Column(String)
     user_primary_key_cid = Column(String)
+    fingerprint_cid = Column(String)
+    user_key_fingerprint = Column(String)
+    node_key_fingerprint = Column(String)
 
 
 class PillarDB:

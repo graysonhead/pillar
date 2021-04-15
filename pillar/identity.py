@@ -91,6 +91,7 @@ class LocalIdentity(PillarDBObject,
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
+    # moved to public method in keymanager
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
             public_key_cid=self.id_interface.key_manager.
@@ -146,6 +147,7 @@ class Primary(LocalIdentity):
                          self.output_queue)
 
         key = self.id_interface.key_manager.generate_local_node_subkey()
+
 
         self.node.fingerprint = key.fingerprint
 

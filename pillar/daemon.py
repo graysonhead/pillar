@@ -1,7 +1,6 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
-from .identity import NodeIdentityMixIn, Node, Primary
 from .keymanager import KeyManager, KeyManagerCommandQueueMixIn, PillarKeyType
 from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
@@ -213,7 +212,6 @@ class CidMessengerWorkerManager(ProcessManager):
 
 
 class ChannelManagerInterface(KeyManagerCommandQueueMixIn,
-                              NodeIdentityMixIn,
                               metaclass=MixedClass):
     pass
 
@@ -234,7 +232,8 @@ class ChannelManager(ProcessManager):
 
     def check_processes(self):
         keys = self.interface.key_manager.get_keys()
-        our_fingerprint = self.interface.node_identity.get_fingerprint()
+        # TODO: actually add this method to KeyManager
+        our_fingerprint = self.interface.key_manager.get_fingerprint()
         for key in keys:
             for short_fingerprint, subkey in key.subkeys.items():
                 try:
@@ -290,11 +289,7 @@ class PillarDaemon:
         managers = [KeyManagerWorkerManager(self.config,
                                             self.shared_command_queue,
                                             self.shared_output_queue,
-                                            bootstrap=self.bootstrap),
-                    NodeWorkerManager(self.config,
-                                      self.shared_command_queue,
-                                      self.shared_output_queue,
-                                      bootstrap=self.bootstrap)]
+                                            bootstrap=self.bootstrap)]
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()

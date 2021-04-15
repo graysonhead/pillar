@@ -1,7 +1,6 @@
 from pillar.config import PillardConfig
 from argparse import Namespace
 import logging
-from pillar.identity import NodeIdentityMixIn
 from pillar.bootstrap import Bootstrapper
 from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.daemon import PillarDaemon
@@ -10,7 +9,7 @@ import sys
 import argparse
 
 
-class CLIInterface(NodeIdentityMixIn, metaclass=MixedClass):
+class CLIInterface(metaclass=MixedClass):
     pass
 
 
@@ -78,6 +77,10 @@ class CLI:
 
         bootstrap.add_argument("--email", help="Email address of the person "
                                "whose pillar user is being bootstrapped")
+
+        bootstrap.add_argument("--register", help="Pass your registrar node's "
+                               "fingerprint cid to generate an invitation and "
+                               "open a channel to contact the registrar.")
 
         subparsers.add_parser("daemon",
                               help="Run pillar daemon")
