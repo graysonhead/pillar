@@ -53,16 +53,15 @@ class CLI:
 
             self.get_interface(daemon)
 
+            ih = InvitationHelper(self.config,
+                                  self.command_queue,
+                                  self.output_queue)
             if self.args.identity_command == 'create_invitation':
-                ih = InvitationHelper(self.config,
-                                      self.command_queue,
-                                      self.output_queue)
                 print(ih.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
                 print(self.interface.key_manager.get_fingerprint_cid())
             elif self.args.identity_command == 'accept_invitation':
-                self.interface.node_identity.receive_invitation_by_cid(
-                    self.args.invitation_cid)
+                ih.receive_invitation_by_cid(self.args.invitation_cid)
             daemon.stop()
         else:
             print("No subcommand provided")

@@ -55,3 +55,12 @@ class InvitationHelper:
 
         return fingerprint_info.fingerprint, fingerprint_info.public_key_cid
 
+    def receive_invitation_by_cid(self, cid: str):
+        self.logger.info(f'Receiving invitation from cid: {cid}')
+        invitation = self.interface.cid_messenger.\
+            get_and_decrypt_message_from_cid(cid, verify=False)
+        if not type(invitation) is InvitationMessage:
+            raise WrongMessageType(type(invitation))
+        self.interface.key_manager.\
+            import_or_update_peer_key(invitation.public_key_cid)
+
