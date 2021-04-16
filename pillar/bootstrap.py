@@ -34,7 +34,7 @@ class Bootstrapper:
         self.key_steps()
         self.defaults = self.args.defaults
         self.bootstrap()
-        
+
     def bootstrap(self):
         self.config_path, self.config = self.bootstrap_config_file_pre()
         self.pds = self.bootstrap_pds_pre()
@@ -90,9 +90,9 @@ class Bootstrapper:
             else:
                 self.register_node = self.register_prompt()
                 if self.register_node:
-                    self.registrar_fingerprint = self.registrar_fingerprint_prompt()
+                    self.registrar_fingerprint = \
+                        self.registrar_fingerprint_prompt()
 
-        
         if self.register_node:
             step = f"Register this node using registrar fingerprint "\
                    f"{self.registrar_fingerprint}."
@@ -116,15 +116,19 @@ class Bootstrapper:
     def registrar_fingerprint_prompt(self):
         return self.ask_three_times("Input the fingerprint cid for your "
                                     "registrar node: ")
-        
+
     def user_name_prompt(self):
         return self.ask_three_times("Please type your full name for key "
                                     "generation: ")
+
     def email_prompt(self):
         return self.ask_three_times("Please type email address for key "
                                     "generation: ")
+
     def register_prompt(self):
-        prompt = input("Are you registering this node with an existing pillar user? yes/[no]")
+        prompt = input(
+            "Are you registering this node with "
+            "an existing pillar user? yes/[no]")
         if prompt.lower() in 'yes' and prompt != '':
             return True
         else:
@@ -151,10 +155,11 @@ class Bootstrapper:
                                             command_queue=self.command_queue,
                                             output_queue=self.output_queue)
         self.logger.info("Generating User Primary key.")
-        user_primary_key = self.interface.key_manager.generate_user_primary_key(
-            self.user_key_name,
-            self.user_key_email
-        )
+        self.interface.\
+            key_manager.generate_user_primary_key(
+                self.user_key_name,
+                self.user_key_email
+            )
 
         self.interface.key_manager.generate_local_node_subkey()
 
@@ -164,10 +169,10 @@ class Bootstrapper:
         print(fc_message)
         kmi.fingerprint_cid = self.interface.cid_messenger.\
             add_unencrypted_message_to_ipfs(fc_message)
-        
+
         kmi.pds_save()
         self.logger.info("Bootstrap User complete.")
-        
+
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()
         self.bootstrap_pds_exec()

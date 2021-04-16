@@ -7,7 +7,7 @@ from .config import PillardConfig
 import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
-    MessageCouldNotBeVerified, KeyTypeAlreadyPresent
+    MessageCouldNotBeVerified
 from .db import PillarDBObject, Key, KeyManagerDataModel
 from .multiproc import PillarWorkerThread, \
     PillarThreadMethodsRegister,\
@@ -116,18 +116,20 @@ class PillarPGPKey(PillarDBObject):
             ret.append(key)
         return ret
 
+
 class KeyManagerData(PillarDBObject):
     model = KeyManagerDataModel
+    user_primary_key_cid = None
 
     def __init__(self, command_queue, output_queue):
         self.logger = logging.getLogger("<KeyManagerData>")
         self.id = 1
         self.node_uuid = None
-        self.user_primary_key_cid = None
         self.fingerprint_cid = None
         self.user_key_fingerprint = None
         self.node_key_fingerprint = None
         super().__init__(command_queue, output_queue)
+
 
 class KeyManagerInstanceData(KeyManagerData):
     def __new__(self, command_queue, output_queue):
@@ -141,8 +143,6 @@ class KeyManagerInstanceData(KeyManagerData):
         return KeyManagerData(command_queue, output_queue)
 
 
-
-    
 class KeyManagerInterfaces(DBMixIn,
                            IPFSMixIn,
                            metaclass=MixedClass):
@@ -352,18 +352,15 @@ class KeyManager(PillarWorkerThread):
 
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
-        if self.kmd.user_primary_key_cid is None:
-            key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-            key.add_uid(uid,
-                        usage=KeyOptions.usage,
-                        hashes=KeyOptions.hashes,
-                        ciphers=KeyOptions.ciphers,
-                        compression=KeyOptions.compression)
-            key |= key.certify(key)
-            self.write_local_privkey(key, PillarKeyType[uid.comment])
-            return key
-        else:
-            raise KeyTypeAlreadyPresent
+        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+        key.add_uid(uid,
+                    usage=KeyOptions.usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
+        key |= key.certify(key)
+        self.write_local_privkey(key, PillarKeyType[uid.comment])
+        return key
 
     def set_registration_primary_key_cid(self, cid):
         self.registration_primary_key_cid = cid

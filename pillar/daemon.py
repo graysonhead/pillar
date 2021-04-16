@@ -123,38 +123,6 @@ class DBWorkerManager(ProcessManager):
             self.start_all_processes()
 
 
-class NodeWorkerManager(ProcessManager):
-
-    def __init__(self,
-                 config: PillardConfig,
-                 command_queue: mp.Queue,
-                 output_queue: mp.Queue,
-                 bootstrap: bool = False):
-        self.bootstrap = bootstrap
-        self.command_queue = command_queue
-        self.output_queue = output_queue
-        self.config = config
-        super().__init__()
-
-    def initialize_processes(self):
-        if self.bootstrap:
-            self.processes.append(
-                Primary(self.config,
-                        self.command_queue,
-                        self.output_queue)
-            )
-        else:
-            self.processes.append(
-                Node.get_local_instance(self.config,
-                                        self.command_queue,
-                                        self.output_queue)
-            )
-
-    def check_processes(self):
-        if not self.processes:
-            self.initialize_processes()
-
-
 class KeyManagerWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,

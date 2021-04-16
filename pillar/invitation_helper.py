@@ -3,9 +3,11 @@ from .IPRPC.cid_messenger import CIDMessengerMixIn
 from .IPRPC.messages import FingerprintMessage, InvitationMessage
 from .multiproc import MixedClass
 from .config import PillardConfig
+from .exceptions import WrongMessageType
 import multiprocessing as mp
 import logging
 from uuid import uuid4
+
 
 class InvitationHelperInterface(KeyManagerCommandQueueMixIn,
                                 CIDMessengerMixIn,
@@ -14,7 +16,7 @@ class InvitationHelperInterface(KeyManagerCommandQueueMixIn,
 
 
 class InvitationHelper:
-    def __init__(self, 
+    def __init__(self,
                  config: PillardConfig,
                  command_queue: mp.Queue,
                  output_queue: mp.Queue
@@ -25,7 +27,7 @@ class InvitationHelper:
             str(self),
             command_queue=command_queue,
             output_queue=output_queue)
-        
+
     def create_invitation(self, peer_fingerprint_cid):
         fingerprint, pubkey_cid = self._get_info_from_fingerprint_cid(
             peer_fingerprint_cid)
@@ -63,4 +65,3 @@ class InvitationHelper:
             raise WrongMessageType(type(invitation))
         self.interface.key_manager.\
             import_or_update_peer_key(invitation.public_key_cid)
-

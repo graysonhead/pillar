@@ -1,12 +1,12 @@
 import shutil
 from pgpy.constants import PubKeyAlgorithm
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 import os
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
-    SerializingKeyList
+    SerializingKeyList, KeyManagerData
 
 import pgpy
 from unittest import TestCase, skip
@@ -30,6 +30,12 @@ class FalseyMock(MagicMock):
     def __call__(self, *args, **kwargs) -> bool:
         super().__call__(*args, **kwargs)
         return False
+
+
+class NoneyMock(MagicMock):
+    def __call__(self, *args, **kwargs) -> bool:
+        super().__call__(*args, **kwargs)
+        return None
 
 
 def mock_new_pgp_public_key():
@@ -90,7 +96,7 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
 class TestEmptyKeyManager(TestCase):
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
-    @ patch('pillar.identity.Node', new_callable=MagicMock)
+    @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig(config_directory="/this/shouldnt/exist")
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
@@ -156,6 +162,7 @@ class TestEmptyKeyManager(TestCase):
 class TestNonEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
+    @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
     @patch('pillar.keymanager.PillarPGPKey',
@@ -237,8 +244,10 @@ class TestKeyManagerSubkeyGeneration(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
            new_callable=MagicMock)
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
+    @patch.object(KeyManagerData,
+                  'user_primary_key_cid',
+                  new_callable=PropertyMock)
+    @patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
@@ -254,16 +263,13 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.km.exit()
         self.km.join()
 
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
     @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
            new_callable=MagicMock)
     def test_generate_local_node_subkey(self, *args):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
 
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
+    @skip
     @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
            new_callable=MagicMock)
     def test_generate_local_node_subkey_same_node_uuid(self, *args):
