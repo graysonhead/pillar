@@ -119,12 +119,12 @@ class PillarPGPKey(PillarDBObject):
 
 class KeyManagerData(PillarDBObject):
     model = KeyManagerDataModel
-    user_primary_key_cid = None
 
     def __init__(self, command_queue, output_queue):
         self.logger = logging.getLogger("<KeyManagerData>")
         self.id = 1
         self.node_uuid = None
+        self.user_primary_key_cid = None
         self.fingerprint_cid = None
         self.user_key_fingerprint = None
         self.node_key_fingerprint = None

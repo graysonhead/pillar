@@ -1,6 +1,6 @@
 import shutil
 from pgpy.constants import PubKeyAlgorithm
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 import os
 from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
@@ -30,12 +30,6 @@ class FalseyMock(MagicMock):
     def __call__(self, *args, **kwargs) -> bool:
         super().__call__(*args, **kwargs)
         return False
-
-
-class NoneyMock(MagicMock):
-    def __call__(self, *args, **kwargs) -> bool:
-        super().__call__(*args, **kwargs)
-        return None
 
 
 def mock_new_pgp_public_key():
@@ -244,9 +238,6 @@ class TestKeyManagerSubkeyGeneration(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
            new_callable=MagicMock)
-    @patch.object(KeyManagerData,
-                  'user_primary_key_cid',
-                  new_callable=PropertyMock)
     @patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
