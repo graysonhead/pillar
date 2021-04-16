@@ -6,7 +6,7 @@ from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
-    SerializingKeyList, KeyManagerData
+    SerializingKeyList
 
 import pgpy
 from unittest import TestCase, skip
