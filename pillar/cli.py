@@ -4,12 +4,15 @@ import logging
 from pillar.bootstrap import Bootstrapper
 from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.daemon import PillarDaemon
+from pillar.keymanager import KeyManagerCommandQueueMixIn
+from pillar.invitation_helper import InvitationHelper
 from pathlib import Path
 import sys
 import argparse
 
 
-class CLIInterface(metaclass=MixedClass):
+class CLIInterface(KeyManagerCommandQueueMixIn,
+                   metaclass=MixedClass):
     pass
 
 
@@ -29,10 +32,10 @@ class CLI:
             self.config = self.get_config(self.args.config)
 
     def get_interface(self, daemon: PillarDaemon) -> None:
-        command_queue, output_queue = daemon.get_queues()
+        self.command_queue, self.output_queue = daemon.get_queues()
         self.interface = CLIInterface(str(self),
-                                      command_queue=command_queue,
-                                      output_queue=output_queue)
+                                      command_queue=self.command_queue,
+                                      output_queue=self.output_queue)
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
@@ -51,10 +54,12 @@ class CLI:
             self.get_interface(daemon)
 
             if self.args.identity_command == 'create_invitation':
-                print(self.interface.node_identity.create_invitation(
-                    self.args.peer_fingerprint_cid))
+                ih = InvitationHelper(self.config,
+                                      self.command_queue,
+                                      self.output_queue)
+                print(ih.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
-                print(self.interface.node_identity.get_fingerprint_cid())
+                print(self.interface.key_manager.get_fingerprint_cid())
             elif self.args.identity_command == 'accept_invitation':
                 self.interface.node_identity.receive_invitation_by_cid(
                     self.args.invitation_cid)

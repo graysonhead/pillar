@@ -121,13 +121,25 @@ class KeyManagerData(PillarDBObject):
 
     def __init__(self, command_queue, output_queue):
         self.logger = logging.getLogger("<KeyManagerData>")
-        self.id = None
+        self.id = 1
         self.node_uuid = None
         self.user_primary_key_cid = None
         self.fingerprint_cid = None
         self.user_key_fingerprint = None
         self.node_key_fingerprint = None
         super().__init__(command_queue, output_queue)
+
+class KeyManagerInstanceData(KeyManagerData):
+    def __new__(self, command_queue, output_queue):
+        self.id = 1
+        row_list = KeyManagerData.load_all_from_db(
+            command_queue, output_queue,
+            [command_queue, output_queue])
+        for row in row_list:
+            if row.id == self.id:
+                return row
+        return KeyManagerData(command_queue, output_queue)
+
 
 
     
@@ -154,11 +166,10 @@ class KeyManager(PillarWorkerThread):
         self.output_queue = output_queue
         super().__init__(command_queue=command_queue,
                          output_queue=output_queue)
-        self.kmd = KeyManagerData(command_queue, output_queue)
+        self.kmd = KeyManagerInstanceData(command_queue, output_queue)
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()
         self.config = config
-        self.user_primary_key_cid = None
         self.registration_primary_key_cid = None
         self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
@@ -167,8 +178,6 @@ class KeyManager(PillarWorkerThread):
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
-        if not hasattr(self, "node_uuid"):
-            self.node_uuid = str(uuid4())
 
         self.queue_thread_class = self.__class__
         self.interfaces = KeyManagerInterfaces(str(self),
@@ -343,7 +352,7 @@ class KeyManager(PillarWorkerThread):
 
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
-        if self.user_primary_key_cid is None:
+        if self.kmd.user_primary_key_cid is None:
             key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
             key.add_uid(uid,
                         usage=KeyOptions.usage,
@@ -380,6 +389,8 @@ class KeyManager(PillarWorkerThread):
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
                               email=email)
         key = self.generate_primary_key(uid)
+        self.kmd.user_key_fingerprint = key.fingerprint
+        self.kmd.pds_save()
         self.user_primary_key = key
         self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
@@ -393,13 +404,15 @@ class KeyManager(PillarWorkerThread):
         This method creates the initial  subkey during the bootstrap
         process using the user primary key.
         """
-        self.kmd.pds_save()
+        self.logger.info("Generating Node Subkey.")
 
+        self.kmd.node_uuid = str(uuid4())
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
         uid = pgpy.PGPUID.new(
-            self.node_uuid,
+            self.kmd.node_uuid,
             comment=PillarKeyType.NODE_SUBKEY.value,
             email=self.user_primary_key.pubkey.userids[0].email)
+        self.kmd.node_key_fingerprint = key.fingerprint
 
         self.user_primary_key.add_uid(
             uid,
@@ -430,7 +443,7 @@ class KeyManager(PillarWorkerThread):
         cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.set_user_primary_key_cid(cid)
 
-        return key
+        self.kmd.pds_save()
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
@@ -446,7 +459,7 @@ class KeyManager(PillarWorkerThread):
         data = self.interfaces.ipfs.add_str(str(message))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
-        self.user_primary_key_cid = data['Hash']
+        self.kmd.user_primary_key_cid = data['Hash']
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
@@ -497,18 +510,19 @@ class KeyManager(PillarWorkerThread):
 
     @ key_manager_methods.register_method
     def get_user_primary_key_cid(self):
-        return self.user_primary_key_cid
+        return self.kmd.user_primary_key_cid
 
     @ key_manager_methods.register_method
-    def bootstrap_node(self, name: str, email: str):
-        self.node.bootstrap(name, email)
-
-    @ key_manager_methods.register_method
-    def create_fingerprint_cid(self):
+    def create_fingerprint_message(self):
         message = FingerprintMessage(
-            public_key_cid=self.get_user_primary_key_cid(),
+            public_key_cid=self.kmd.user_primary_key_cid,
             fingerprint=str(self.kmd.node_key_fingerprint))
-        self.logger.debug(f"created fingerprint cid: {message}")
+        return message
+
+    @ key_manager_methods.register_method
+    def get_fingerprint_cid(self):
+        return self.kmd.fingerprint_cid
+
 
 class KeyManagerCommandQueueMixIn(PillarThreadMixIn):
     queue_thread_class = KeyManager

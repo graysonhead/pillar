@@ -2,8 +2,9 @@ from argparse import Namespace
 from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
 from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn, \
-    KeyManagerData
+    KeyManagerInstanceData
 from pillar.multiproc import MixedClass
+from pillar.IPRPC.cid_messenger import CIDMessengerMixIn
 from pathlib import Path
 from pillar.daemon import PillarDaemon
 import os
@@ -12,6 +13,7 @@ import logging
 
 
 class BootstrapInterface(KeyManagerCommandQueueMixIn,
+                         CIDMessengerMixIn,
                          metaclass=MixedClass):
     pass
 
@@ -153,17 +155,18 @@ class Bootstrapper:
             self.user_key_name,
             self.user_key_email
         )
-        kmd = KeyManagerData(self.command_queue, self.output_queue)
-        kmd.user_key_fingerprint = user_primary_key.fingerprint
 
-        self.logger.info("Generating Node Subkey.")
-        node_subkey = self.interface.key_manager.generate_local_node_subkey()
-        kmd.node_fingerprint = node_subkey.fingerprint
+        self.interface.key_manager.generate_local_node_subkey()
 
-        kmd.fingerprint_cid = self.interface.key_manager.create_fingerprint_cid()
+        kmi = KeyManagerInstanceData(self.command_queue, self.output_queue)
+        fc_message = self.interface.key_manager.create_fingerprint_message()
 
-        kmd.pds_save()
-        self.logger.info("Key generation complete.")
+        print(fc_message)
+        kmi.fingerprint_cid = self.interface.cid_messenger.\
+            add_unencrypted_message_to_ipfs(fc_message)
+        
+        kmi.pds_save()
+        self.logger.info("Bootstrap User complete.")
         
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()

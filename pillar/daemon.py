@@ -168,19 +168,11 @@ class KeyManagerWorkerManager(ProcessManager):
         super().__init__()
 
     def initialize_processes(self):
-        if self.bootstrap:
-            self.processes.append(
-                KeyManager(self.config,
-                           self.command_queue,
-                           self.output_queue)
-            )
-        else:
-            self.processes.append(
-                KeyManager.get_local_instance(
-                    self.config,
-                    self.command_queue,
-                    self.output_queue
-                ))
+        self.processes.append(
+            KeyManager(self.config,
+                       self.command_queue,
+                       self.output_queue)
+        )
 
     def check_processes(self):
         if not self.processes:
