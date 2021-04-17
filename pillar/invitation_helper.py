@@ -52,6 +52,7 @@ class InvitationHelper:
             f'Getting peer fingerprint info from cid: {fingerprint_cid}')
         fingerprint_info = self.interface.cid_messenger.\
             get_unencrypted_message_from_cid(fingerprint_cid)
+
         if not type(fingerprint_info) is FingerprintMessage:
             raise WrongMessageType(type(fingerprint_info))
 
