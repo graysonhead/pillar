@@ -76,7 +76,6 @@ class CIDMessenger(PillarWorkerThread):
                 serialized_message,
                 peer_fingerprint)
 
-        print("CIDMessenger encryption worked.")
         data = self.interface.ipfs.add_str(str(encrypted_message))
         self.logger.info(f"Created new encrypted message: {data['Hash']}")
         return data['Hash']

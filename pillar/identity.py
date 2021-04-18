@@ -30,7 +30,6 @@ class LocalIdentity(PillarDBObject,
         self.command_queue = command_queue
         self.output_queue = output_queue
         self.logger = logging.getLogger(f'<{self.__class__.__name__}>')
-        self.public_key_cid = None
         self.config = config
         self.cid_messenger_instance = None
         self.id_interface = IdentityInterface(str(self),
@@ -54,9 +53,6 @@ class LocalIdentity(PillarDBObject,
                                                   self.command_queue,
                                                   self.output_queue)
 
-        self.public_key_cid = self.id_interface.key_manager.\
-            get_user_primary_key_cid()
-
     def receive_invitation_by_cid(self, cid: str):
         self.logger.info(f'Receiving invitation from cid: {cid}')
         invitation = self.id_interface.cid_messenger.\
@@ -74,7 +70,8 @@ class LocalIdentity(PillarDBObject,
             pubkey_cid)
 
         invitation = InvitationMessage(
-            public_key_cid=self.public_key_cid,
+            public_key_cid=self.id_interface.key_manager.
+            get_user_primary_key_cid(),
             preshared_key=str(uuid4()),
             channels_per_peer=self.config.get_value('channels_per_peer'),
             channel_rotation_period=self.config.get_value('channels_per_peer')
@@ -96,7 +93,8 @@ class LocalIdentity(PillarDBObject,
 
     def create_fingerprint_cid(self):
         message = FingerprintMessage(
-            public_key_cid=self.public_key_cid,
+            public_key_cid=self.id_interface.key_manager.
+            get_user_primary_key_cid(),
             fingerprint=str(self.fingerprint))
         self.logger.debug(f"created fingerprint cid: {message}")
 
@@ -136,7 +134,6 @@ class Primary(LocalIdentity):
             self.key_type)
         self.fingerprint = self.key.fingerprint
         self.bootstrap_node()
-        self.public_key_cid = self.node.public_key_cid
         self.fingerprint_cid = self.create_fingerprint_cid()
         self.pds_save()
         self.logger.info(
@@ -152,8 +149,6 @@ class Primary(LocalIdentity):
 
         self.node.fingerprint = key.fingerprint
 
-        self.node.public_key_cid = self.id_interface.\
-            key_manager.get_user_primary_key_cid()
         self.node.fingerprint_cid = self.node.create_fingerprint_cid()
         self.node.pds_save()
 

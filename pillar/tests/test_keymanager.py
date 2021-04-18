@@ -171,6 +171,11 @@ class TestNonEmptyKeyManager(TestCase):
 
         self.km.import_peer_key_from_cid('not_used')
 
+    def test_get_keys_assert_primary(self):
+        skl = self.km.get_keys()
+        for k in skl:
+            assert(k.is_primary)
+
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey2)
     @ patch('pillar.keymanager.KeyManager.ensure_cid_content_present',
@@ -257,6 +262,16 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
 
+    @patch('pillar.keymanager.KeyManager.pds_save',
+           new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
+           new_callable=MagicMock)
+    def test_generate_local_node_subkey_same_node_uuid(self, *args):
+        import copy
+        orig = copy.copy(self.km.node_uuid)
+        self.km.generate_local_node_subkey()
+        self.assertEqual(orig, self.km.node_uuid)
+
 
 @skip
 class TestKeyManagerDBOperations(TestCase):
@@ -334,6 +349,14 @@ class TestEmptySerializingKeyList(TestCase):
         self.skl.append(k)
         self.skl[0] = k
         self.assertEqual(k.fingerprint, self.skl.pop().fingerprint)
+
+    def test_check_raises_for_non_primary(self):
+        """
+        non-primary keys are disallowed since they can't be deserialized.
+        """
+        with self.assertRaises(TypeError):
+            for o, k in get_deencapsulated_pillar_pgp_key().subkeys.items():
+                self.skl.append(k)
 
     def test___str__(self):
         assert(isinstance(self.skl.__str__(), str))

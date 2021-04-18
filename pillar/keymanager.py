@@ -63,8 +63,16 @@ class SerializingKeyList(collections.MutableSequence):
         self.extend(list(args))
 
     def check(self, key: pgpy.PGPKey):
+        """
+        ensures that added items are pgpy PGPKey objects.
+        Also checks that they're primary since loading extracted
+        subkeys raises a parse error in pgpy.
+        """
         if not isinstance(key, pgpy.PGPKey):
             raise TypeError(f"wrong type {type(key)}; should be pgpy.PGPKey")
+        else:
+            if not key.is_primary:
+                raise TypeError("Key must be primary")
 
     def __len__(self): return len(self.list)
 
@@ -380,7 +388,6 @@ class KeyManager(PillarDBObject,
         This method creates the initial  subkey during the bootstrap
         process using the user primary key.
         """
-        self.node_uuid = str(uuid4())
         self.pds_save()
 
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
@@ -456,7 +463,8 @@ class KeyManager(PillarDBObject,
         keys = SerializingKeyList()
         for fingerprint in self.keyring.fingerprints():
             with self.keyring.key(fingerprint) as key:
-                keys.append(key)
+                if key.is_primary:
+                    keys.append(key)
         return keys
 
     @ key_manager_methods.register_method
