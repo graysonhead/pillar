@@ -6,7 +6,7 @@ from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
-    SerializingKeyList
+    SerializingKeyList, KeyManagerInstanceData, KeyManagerData
 
 import pgpy
 from unittest import TestCase, skip
@@ -379,3 +379,23 @@ class TestSerializingKeyListKeyAttrs(TestCase):
         k = self.skl.pop()
         self.assertEqual(len(k.subkeys.keys()),
                          len(self.key.subkeys.keys()))
+
+
+def wrapped_list_of_kmd(*args, **kwargs):
+    def returns_list_of_kmd(*args, **kwargs):
+        return [KeyManagerData(MagicMock(), MagicMock())]
+    return returns_list_of_kmd
+
+
+class TestKeyManagerInstanceData(TestCase):
+    @ patch("pillar.keymanager.KeyManagerData.load_all_from_db",
+            new_callable=MagicMock)
+    def test_instance_kmid(self, *args):
+        kmid = KeyManagerInstanceData(MagicMock(), MagicMock())
+        self.assertEqual(kmid.id, 1)
+
+    @ patch("pillar.keymanager.KeyManagerData.load_all_from_db",
+            new_callable=wrapped_list_of_kmd)
+    def test_instance_kmid_2(self, *args):
+        kmid = KeyManagerInstanceData(MagicMock(), MagicMock())
+        self.assertEqual(kmid.id, 1)
