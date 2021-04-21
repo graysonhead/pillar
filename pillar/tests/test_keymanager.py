@@ -99,7 +99,7 @@ class TestEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = PillardConfig(config_directory="/this/shouldnt/exist")
+        self.config = PillardConfig()
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
 
     def test_instantiate_keymanager_class(self):
