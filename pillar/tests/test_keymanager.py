@@ -7,7 +7,7 @@ from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
 from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
     SerializingKeyList, KeyManagerInstanceData, KeyManagerData
-
+from pillar.IPRPC.messages import FingerprintMessage
 import pgpy
 from unittest import TestCase, skip
 
@@ -87,7 +87,14 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
     key_path = './data/invalid_pubkey2.msgkey'
 
 
+class AdHocMockKMData(MagicMock):
+    user_primary_key_cid = 'string'
+    node_key_fingerprint = 'data'
+
+
 class TestEmptyKeyManager(TestCase):
+    @patch('pillar.keymanager.KeyManagerInstanceData',
+           new_callable=AdHocMockKMData())
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
@@ -151,6 +158,14 @@ class TestEmptyKeyManager(TestCase):
     def test_update_peer_key_first_raises_exception(self, *args):
         with self.assertRaises(KeyNotInKeyring):
             self.km.update_peer_key('not_used')
+
+    def test_create_fingerprint_message(self, *args):
+        m = self.km.create_fingerprint_message()
+        self.assertIsInstance(m, FingerprintMessage)
+
+    def test_get_fingerprint_cid(self):
+        self.assertEqual(self.km.kmd.fingerprint_cid,
+                         self.km.get_fingerprint_cid())
 
 
 class TestNonEmptyKeyManager(TestCase):
