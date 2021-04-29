@@ -1,16 +1,18 @@
 from pillar.config import PillardConfig
 from argparse import Namespace
 import logging
-from pillar.identity import NodeIdentityMixIn
 from pillar.bootstrap import Bootstrapper
 from pillar.multiproc import PillarThreadInterface, MixedClass
 from pillar.daemon import PillarDaemon
+from pillar.keymanager import KeyManagerCommandQueueMixIn
+from pillar.invitation_helper import InvitationHelper
 from pathlib import Path
 import sys
 import argparse
 
 
-class CLIInterface(NodeIdentityMixIn, metaclass=MixedClass):
+class CLIInterface(KeyManagerCommandQueueMixIn,
+                   metaclass=MixedClass):
     pass
 
 
@@ -30,10 +32,10 @@ class CLI:
             self.config = self.get_config(self.args.config)
 
     def get_interface(self, daemon: PillarDaemon) -> None:
-        command_queue, output_queue = daemon.get_queues()
+        self.command_queue, self.output_queue = daemon.get_queues()
         self.interface = CLIInterface(str(self),
-                                      command_queue=command_queue,
-                                      output_queue=output_queue)
+                                      command_queue=self.command_queue,
+                                      output_queue=self.output_queue)
 
     def run(self):
         if self.args.sub_command == 'bootstrap':
@@ -51,14 +53,15 @@ class CLI:
 
             self.get_interface(daemon)
 
+            ih = InvitationHelper(self.config,
+                                  self.command_queue,
+                                  self.output_queue)
             if self.args.identity_command == 'create_invitation':
-                print(self.interface.node_identity.create_invitation(
-                    self.args.peer_fingerprint_cid))
+                print(ih.create_invitation(self.args.peer_fingerprint_cid))
             elif self.args.identity_command == 'fingerprint_cid':
-                print(self.interface.node_identity.get_fingerprint_cid())
+                print(self.interface.key_manager.get_fingerprint_cid())
             elif self.args.identity_command == 'accept_invitation':
-                self.interface.node_identity.receive_invitation_by_cid(
-                    self.args.invitation_cid)
+                ih.receive_invitation_by_cid(self.args.invitation_cid)
             daemon.stop()
         else:
             print("No subcommand provided")
@@ -78,6 +81,10 @@ class CLI:
 
         bootstrap.add_argument("--email", help="Email address of the person "
                                "whose pillar user is being bootstrapped")
+
+        bootstrap.add_argument("--register", help="Pass your registrar node's "
+                               "fingerprint cid to generate an invitation and "
+                               "open a channel to contact the registrar.")
 
         subparsers.add_parser("daemon",
                               help="Run pillar daemon")

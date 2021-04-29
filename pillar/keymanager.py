@@ -7,11 +7,12 @@ from .config import PillardConfig
 import asyncio
 from .exceptions import KeyNotVerified, KeyNotInKeyring, KeyTypeNotPresent,\
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey,\
-    MessageCouldNotBeVerified, KeyTypeAlreadyPresent
-from .db import PillarDBObject, Key, KeyManagerData
+    MessageCouldNotBeVerified
+from .db import PillarDBObject, Key, KeyManagerDataModel
 from .multiproc import PillarWorkerThread, \
     PillarThreadMethodsRegister,\
     PillarThreadMixIn, MixedClass
+from .IPRPC.messages import FingerprintMessage
 from enum import Enum
 from uuid import uuid4
 import os
@@ -26,14 +27,6 @@ class PillarKeyType(Enum):
     REGISTRATION_PRIMARY_KEY = "REGISTRATION_PRIMARY_KEY"
     USER_PRIMARY_KEY = "USER_PRIMARY_KEY"
     NODE_SUBKEY = "NODE_SUBKEY"
-
-
-class KeyManagerStatus(Enum):
-    UNREGISTERED = "UNREGISTERED"
-    NODE = "NODE"
-    PRIMARY = "PRIMARY"
-    PRIMARY_NODE = "PRIMARY+NODE"
-    PRIMARY_NODE_USER = "PRIMARY+NODE"
 
 
 class KeyOptions:
@@ -124,20 +117,44 @@ class PillarPGPKey(PillarDBObject):
         return ret
 
 
+class KeyManagerData(PillarDBObject):
+    model = KeyManagerDataModel
+
+    def __init__(self, command_queue, output_queue):
+        self.logger = logging.getLogger("<KeyManagerData>")
+        self.id = 1
+        self.node_uuid = None
+        self.user_primary_key_cid = None
+        self.fingerprint_cid = None
+        self.user_key_fingerprint = None
+        self.node_key_fingerprint = None
+        super().__init__(command_queue, output_queue)
+
+
+class KeyManagerInstanceData(KeyManagerData):
+    def __new__(self, command_queue, output_queue):
+        self.id = 1
+        row_list = KeyManagerData.load_all_from_db(
+            command_queue, output_queue,
+            [command_queue, output_queue])
+        for row in row_list:
+            if row.id == self.id:
+                return row
+        return KeyManagerData(command_queue, output_queue)
+
+
 class KeyManagerInterfaces(DBMixIn,
                            IPFSMixIn,
                            metaclass=MixedClass):
     pass
 
 
-class KeyManager(PillarDBObject,
-                 PillarWorkerThread):
+class KeyManager(PillarWorkerThread):
     """
     Keymanager creates and manages the keys needed to operate a
     pillar instance and decrypt messages from peers and maintains
     the keyring used to validate and encrypt messages to peers.
     """
-    model = KeyManagerData
     methods_register = key_manager_methods
 
     def __init__(self,
@@ -147,14 +164,12 @@ class KeyManager(PillarDBObject,
         self.logger = logging.getLogger('<KeyManager>')
         self.command_queue = command_queue
         self.output_queue = output_queue
-        super(PillarDBObject, self).__init__(self.command_queue,
-                                             self.output_queue)
         super().__init__(command_queue=command_queue,
                          output_queue=output_queue)
+        self.kmd = KeyManagerInstanceData(command_queue, output_queue)
         self.keyring = pgpy.PGPKeyring()
         self.loop = asyncio.new_event_loop()
         self.config = config
-        self.user_primary_key_cid = None
         self.registration_primary_key_cid = None
         self.registration_primary_key = self.load_keytype(
             PillarKeyType.REGISTRATION_PRIMARY_KEY)
@@ -163,8 +178,6 @@ class KeyManager(PillarDBObject,
         self.node_subkey = self.load_keytype(PillarKeyType.NODE_SUBKEY)
         self.peer_subkey_map = {}
         self.peer_cid_fingerprint_map = {}
-        if not hasattr(self, "node_uuid"):
-            self.node_uuid = str(uuid4())
 
         self.queue_thread_class = self.__class__
         self.interfaces = KeyManagerInterfaces(str(self),
@@ -339,25 +352,22 @@ class KeyManager(PillarDBObject,
 
     def generate_primary_key(self, uid: pgpy.PGPUID):
         self.logger.info(f"Generating primary key: {uid}")
-        if self.user_primary_key_cid is None:
-            key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
-            key.add_uid(uid,
-                        usage=KeyOptions.usage,
-                        hashes=KeyOptions.hashes,
-                        ciphers=KeyOptions.ciphers,
-                        compression=KeyOptions.compression)
-            key |= key.certify(key)
-            self.write_local_privkey(key, PillarKeyType[uid.comment])
-            return key
-        else:
-            raise KeyTypeAlreadyPresent
+        key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
+        key.add_uid(uid,
+                    usage=KeyOptions.usage,
+                    hashes=KeyOptions.hashes,
+                    ciphers=KeyOptions.ciphers,
+                    compression=KeyOptions.compression)
+        key |= key.certify(key)
+        self.write_local_privkey(key, PillarKeyType[uid.comment])
+        return key
 
     def set_registration_primary_key_cid(self, cid):
         self.registration_primary_key_cid = cid
 
     def set_user_primary_key_cid(self, cid):
-        self.user_primary_key_cid = cid
-        self.pds_save()
+        self.kmd.user_primary_key_cid = cid
+        self.kmd.pds_save()
 
     def generate_registration_primary_key(self):
         uid = pgpy.PGPUID.new(
@@ -376,11 +386,14 @@ class KeyManager(PillarDBObject,
                               comment=PillarKeyType.USER_PRIMARY_KEY.value,
                               email=email)
         key = self.generate_primary_key(uid)
+        self.kmd.user_key_fingerprint = key.fingerprint
+        self.kmd.pds_save()
         self.user_primary_key = key
         self.load_keytype(
             PillarKeyType.USER_PRIMARY_KEY)
         cid = self.add_key_message_to_ipfs(key.pubkey)
         self.set_user_primary_key_cid(cid)
+        return key
 
     @ key_manager_methods.register_method
     def generate_local_node_subkey(self):
@@ -388,13 +401,15 @@ class KeyManager(PillarDBObject,
         This method creates the initial  subkey during the bootstrap
         process using the user primary key.
         """
-        self.pds_save()
+        self.logger.info("Generating Node Subkey.")
 
+        self.kmd.node_uuid = str(uuid4())
         key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
         uid = pgpy.PGPUID.new(
-            self.node_uuid,
+            self.kmd.node_uuid,
             comment=PillarKeyType.NODE_SUBKEY.value,
             email=self.user_primary_key.pubkey.userids[0].email)
+        self.kmd.node_key_fingerprint = key.fingerprint
 
         self.user_primary_key.add_uid(
             uid,
@@ -425,7 +440,7 @@ class KeyManager(PillarDBObject,
         cid = self.add_key_message_to_ipfs(self.user_primary_key.pubkey)
         self.set_user_primary_key_cid(cid)
 
-        return key
+        self.kmd.pds_save()
 
     def write_local_privkey(self, key: pgpy.PGPKey, keytype: PillarKeyType):
         keypath = os.path.join(
@@ -441,7 +456,7 @@ class KeyManager(PillarDBObject,
         data = self.interfaces.ipfs.add_str(str(message))
         self.add_key_to_local_storage(data['Hash'])
         self.logger.info(f"Added pubkey to ipfs: {data['Hash']}")
-        self.user_primary_key_cid = data['Hash']
+        self.kmd.user_primary_key_cid = data['Hash']
         return data['Hash']
 
     def add_key_to_local_storage(self, cid: str):
@@ -492,37 +507,18 @@ class KeyManager(PillarDBObject,
 
     @ key_manager_methods.register_method
     def get_user_primary_key_cid(self):
-        return self.user_primary_key_cid
+        return self.kmd.user_primary_key_cid
 
     @ key_manager_methods.register_method
-    def bootstrap_node(self, name: str, email: str):
-        self.node.bootstrap(name, email)
+    def create_fingerprint_message(self):
+        message = FingerprintMessage(
+            public_key_cid=self.kmd.user_primary_key_cid,
+            fingerprint=str(self.kmd.node_key_fingerprint))
+        return message
 
-
-class QueueCommand:
-    def __init__(self, command_name: str, *args, **kwargs):
-        self.logger = logging.getLogger(f"<{self.__class__.__name__}>")
-        self.command_name = command_name
-        self.args = args
-        self.kwargs = kwargs
-        self.id = uuid4()
-
-    def __dict__(self):
-        return {"id": self.id,
-                "command_name": self.command_name,
-                "args": self.args,
-                "kwargs": self.kwargs}
-
-
-class KeyManagerCommandCallable:
-
-    def __init__(self, command: str, parent_instance):
-        self.command = command
-        self.parent_instance = parent_instance
-
-    def __call__(self, *args, **kwargs):
-        return self.parent_instance.key_manager_command(self.command,
-                                                        *args, **kwargs)
+    @ key_manager_methods.register_method
+    def get_fingerprint_cid(self):
+        return self.kmd.fingerprint_cid
 
 
 class KeyManagerCommandQueueMixIn(PillarThreadMixIn):

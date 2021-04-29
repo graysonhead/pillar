@@ -1,7 +1,6 @@
 from .config import PillardConfig, get_ipfs_config_options
 from .ipfs import IPFSWorker, IPFSClient
 from .db import PillarDBWorker
-from .identity import NodeIdentityMixIn, Node, Primary
 from .keymanager import KeyManager, KeyManagerCommandQueueMixIn, PillarKeyType
 from .IPRPC.cid_messenger import CIDMessenger
 from .multiproc import MixedClass
@@ -124,38 +123,6 @@ class DBWorkerManager(ProcessManager):
             self.start_all_processes()
 
 
-class NodeWorkerManager(ProcessManager):
-
-    def __init__(self,
-                 config: PillardConfig,
-                 command_queue: mp.Queue,
-                 output_queue: mp.Queue,
-                 bootstrap: bool = False):
-        self.bootstrap = bootstrap
-        self.command_queue = command_queue
-        self.output_queue = output_queue
-        self.config = config
-        super().__init__()
-
-    def initialize_processes(self):
-        if self.bootstrap:
-            self.processes.append(
-                Primary(self.config,
-                        self.command_queue,
-                        self.output_queue)
-            )
-        else:
-            self.processes.append(
-                Node.get_local_instance(self.config,
-                                        self.command_queue,
-                                        self.output_queue)
-            )
-
-    def check_processes(self):
-        if not self.processes:
-            self.initialize_processes()
-
-
 class KeyManagerWorkerManager(ProcessManager):
 
     def __init__(self, config: PillardConfig,
@@ -169,19 +136,11 @@ class KeyManagerWorkerManager(ProcessManager):
         super().__init__()
 
     def initialize_processes(self):
-        if self.bootstrap:
-            self.processes.append(
-                KeyManager(self.config,
-                           self.command_queue,
-                           self.output_queue)
-            )
-        else:
-            self.processes.append(
-                KeyManager.get_local_instance(
-                    self.config,
-                    self.command_queue,
-                    self.output_queue
-                ))
+        self.processes.append(
+            KeyManager(self.config,
+                       self.command_queue,
+                       self.output_queue)
+        )
 
     def check_processes(self):
         if not self.processes:
@@ -213,7 +172,6 @@ class CidMessengerWorkerManager(ProcessManager):
 
 
 class ChannelManagerInterface(KeyManagerCommandQueueMixIn,
-                              NodeIdentityMixIn,
                               metaclass=MixedClass):
     pass
 
@@ -234,7 +192,8 @@ class ChannelManager(ProcessManager):
 
     def check_processes(self):
         keys = self.interface.key_manager.get_keys()
-        our_fingerprint = self.interface.node_identity.get_fingerprint()
+        # TODO: actually add this method to KeyManager
+        our_fingerprint = self.interface.key_manager.get_fingerprint()
         for key in keys:
             for short_fingerprint, subkey in key.subkeys.items():
                 try:
@@ -290,11 +249,7 @@ class PillarDaemon:
         managers = [KeyManagerWorkerManager(self.config,
                                             self.shared_command_queue,
                                             self.shared_output_queue,
-                                            bootstrap=self.bootstrap),
-                    NodeWorkerManager(self.config,
-                                      self.shared_command_queue,
-                                      self.shared_output_queue,
-                                      bootstrap=self.bootstrap)]
+                                            bootstrap=self.bootstrap)]
         for manager in managers:
             self.process_managers.append(manager)
             manager.start_all_processes()

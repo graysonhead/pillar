@@ -1,9 +1,10 @@
 from argparse import Namespace
 from pillar.config import PillardConfig
 from pillar.db import PillarDataStore
-from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn
-from pillar.identity import PrimaryIdentityMixIn
+from pillar.keymanager import KeyManager, KeyManagerCommandQueueMixIn, \
+    KeyManagerInstanceData
 from pillar.multiproc import MixedClass
+from pillar.IPRPC.cid_messenger import CIDMessengerMixIn
 from pathlib import Path
 from pillar.daemon import PillarDaemon
 import os
@@ -12,7 +13,7 @@ import logging
 
 
 class BootstrapInterface(KeyManagerCommandQueueMixIn,
-                         PrimaryIdentityMixIn,
+                         CIDMessengerMixIn,
                          metaclass=MixedClass):
     pass
 
@@ -30,8 +31,7 @@ class Bootstrapper:
         self.config_path = None
         self.config = None
         self.interface = None
-        self.user_key_name = self.args.user_name or self.user_name_prompt()
-        self.user_key_email = self.args.email or self.email_prompt()
+        self.key_steps()
         self.defaults = self.args.defaults
         self.bootstrap()
 
@@ -80,29 +80,59 @@ class Bootstrapper:
         self.pds.create_database(purge=self.args.purge)
         print("Database created")
 
-    def user_name_prompt(self):
+    def key_steps(self):
+        if self.args.register:
+            self.registrar_fingerprint = self.args.register
+            self.register_node = True
+        else:
+            if self.args.email or self.args.user_name:
+                self.register_node = False
+            else:
+                self.register_node = self.register_prompt()
+                if self.register_node:
+                    self.registrar_fingerprint = \
+                        self.registrar_fingerprint_prompt()
+
+        if self.register_node:
+            step = f"Register this node using registrar fingerprint "\
+                   f"{self.registrar_fingerprint}."
+        else:
+            self.user_key_name = self.args.user_name or self.user_name_prompt()
+            self.user_key_email = self.args.email or self.email_prompt()
+            step = f"Generate a new user primary key for {self.user_key_name}."
+        self.planned_steps.append(step)
+
+    def ask_three_times(self, prompt: str):
         i = 3
         while i > 0:
             i -= 1
-            user_name = input("Please type your full name for key "
-                              "generation: ")
-            if user_name == '':
-                print("Name field cannot be blank")
+            out = input(prompt)
+            if out == '':
+                print("Field cannot be blank")
             else:
-                return user_name
+                return out
         exit(1)
 
+    def registrar_fingerprint_prompt(self):
+        return self.ask_three_times("Input the fingerprint cid for your "
+                                    "registrar node: ")
+
+    def user_name_prompt(self):
+        return self.ask_three_times("Please type your full name for key "
+                                    "generation: ")
+
     def email_prompt(self):
-        i = 3
-        while i > 0:
-            i -= 1
-            email = input("Please type your email address for key "
-                          "generation: ")
-            if email == '':
-                print("Email field cannot be blank")
-            else:
-                return email
-        exit(1)
+        return self.ask_three_times("Please type email address for key "
+                                    "generation: ")
+
+    def register_prompt(self):
+        prompt = input(
+            "Are you registering this node with "
+            "an existing pillar user? yes/[no]")
+        if prompt.lower() in 'yes' and prompt != '':
+            return True
+        else:
+            return False
 
     def bootstrap_keymanager_pre(self) -> KeyManager:
         keymanager = KeyManager(self.config)
@@ -117,20 +147,40 @@ class Bootstrapper:
 
         return keymanager
 
-    def bootstrap_keymanager_exec(self):
+    def bootstrap_user_exec(self):
         self.daemon = PillarDaemon(self.config, bootstrap=True)
         self.command_queue, self.output_queue = self.daemon.get_queues()
         self.daemon.start()
         self.interface = BootstrapInterface(str(self),
                                             command_queue=self.command_queue,
                                             output_queue=self.output_queue)
-        self.interface.primary_identity.bootstrap(self.user_key_name,
-                                                  self.user_key_email)
+        self.logger.info("Generating User Primary key.")
+        self.interface.\
+            key_manager.generate_user_primary_key(
+                self.user_key_name,
+                self.user_key_email
+            )
+
+        self.interface.key_manager.generate_local_node_subkey()
+
+        kmi = KeyManagerInstanceData(self.command_queue, self.output_queue)
+        fc_message = self.interface.key_manager.create_fingerprint_message()
+
+        print(fc_message)
+        kmi.fingerprint_cid = self.interface.cid_messenger.\
+            add_unencrypted_message_to_ipfs(fc_message)
+
+        kmi.pds_save()
+        self.logger.info("Bootstrap User complete.")
 
     def bootstrap_execute(self):
         self.bootstrap_config_file_exec()
         self.bootstrap_pds_exec()
-        self.bootstrap_keymanager_exec()
+        if self.register_node:
+            print("Node registration not implemented")
+            exit(1)
+        else:
+            self.bootstrap_user_exec()
 
     def bootstrap_config_file_exec(self):
         print(f"Writing config file {self.config_path}")

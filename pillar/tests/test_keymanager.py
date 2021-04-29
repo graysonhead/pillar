@@ -6,8 +6,8 @@ from ..exceptions import KeyNotVerified, KeyNotInKeyring, \
     CannotImportSamePrimaryFingerprint, WontUpdateToStaleKey
 from ..config import PillardConfig
 from ..keymanager import KeyManager, KeyOptions, PillarKeyType, PillarPGPKey,\
-    SerializingKeyList
-
+    SerializingKeyList, KeyManagerInstanceData, KeyManagerData
+from pillar.IPRPC.messages import FingerprintMessage
 import pgpy
 from unittest import TestCase, skip
 
@@ -87,12 +87,19 @@ class mock_invalid_pubkey2(MockPGPKeyFromFile):
     key_path = './data/invalid_pubkey2.msgkey'
 
 
+class AdHocMockKMData(MagicMock):
+    user_primary_key_cid = 'string'
+    node_key_fingerprint = 'data'
+
+
 class TestEmptyKeyManager(TestCase):
+    @patch('pillar.keymanager.KeyManagerInstanceData',
+           new_callable=AdHocMockKMData())
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
-    @ patch('pillar.identity.Node', new_callable=MagicMock)
+    @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
-        self.config = PillardConfig(config_directory="/this/shouldnt/exist")
+        self.config = PillardConfig()
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
 
     def test_instantiate_keymanager_class(self):
@@ -152,10 +159,19 @@ class TestEmptyKeyManager(TestCase):
         with self.assertRaises(KeyNotInKeyring):
             self.km.update_peer_key('not_used')
 
+    def test_create_fingerprint_message(self, *args):
+        m = self.km.create_fingerprint_message()
+        self.assertIsInstance(m, FingerprintMessage)
+
+    def test_get_fingerprint_cid(self):
+        self.assertEqual(self.km.kmd.fingerprint_cid,
+                         self.km.get_fingerprint_cid())
+
 
 class TestNonEmptyKeyManager(TestCase):
     @ patch('asyncio.get_event_loop', new_callable=MagicMock)
     @ patch('aioipfs.AsyncIPFS', new_callable=MagicMock)
+    @ patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     @ patch('pillar.keymanager.KeyManager.get_key_message_by_cid',
             new_callable=mock_pubkey1)
     @patch('pillar.keymanager.PillarPGPKey',
@@ -237,8 +253,7 @@ class TestKeyManagerSubkeyGeneration(TestCase):
            new_callable=MagicMock)
     @patch('pillar.keymanager.PillarPGPKey.pds_save',
            new_callable=MagicMock)
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
+    @patch('pillar.keymanager.KeyManagerInstanceData', new_callable=MagicMock)
     def setUp(self, *args):
         self.config = PillardConfig()
         self.km = KeyManager(self.config, MagicMock(), MagicMock())
@@ -254,16 +269,13 @@ class TestKeyManagerSubkeyGeneration(TestCase):
         self.km.exit()
         self.km.join()
 
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
     @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
            new_callable=MagicMock)
     def test_generate_local_node_subkey(self, *args):
         self.km.generate_local_node_subkey()
         self.km.add_key_message_to_ipfs.assert_called()
 
-    @patch('pillar.keymanager.KeyManager.pds_save',
-           new_callable=MagicMock)
+    @skip
     @patch('pillar.keymanager.KeyManager.add_key_message_to_ipfs',
            new_callable=MagicMock)
     def test_generate_local_node_subkey_same_node_uuid(self, *args):
@@ -382,3 +394,23 @@ class TestSerializingKeyListKeyAttrs(TestCase):
         k = self.skl.pop()
         self.assertEqual(len(k.subkeys.keys()),
                          len(self.key.subkeys.keys()))
+
+
+def wrapped_list_of_kmd(*args, **kwargs):
+    def returns_list_of_kmd(*args, **kwargs):
+        return [KeyManagerData(MagicMock(), MagicMock())]
+    return returns_list_of_kmd
+
+
+class TestKeyManagerInstanceData(TestCase):
+    @ patch("pillar.keymanager.KeyManagerData.load_all_from_db",
+            new_callable=MagicMock)
+    def test_instance_kmid(self, *args):
+        kmid = KeyManagerInstanceData(MagicMock(), MagicMock())
+        self.assertEqual(kmid.id, 1)
+
+    @ patch("pillar.keymanager.KeyManagerData.load_all_from_db",
+            new_callable=wrapped_list_of_kmd)
+    def test_instance_kmid_2(self, *args):
+        kmid = KeyManagerInstanceData(MagicMock(), MagicMock())
+        self.assertEqual(kmid.id, 1)
