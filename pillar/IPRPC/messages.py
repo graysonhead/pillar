@@ -22,6 +22,9 @@ class IPRPCMessage:
             else:
                 if arg in self.attributes.keys():
                     intended_type = self.attributes.get(arg)
+                    if issubclass(intended_type, IPRPCMessage):
+                        if type(value) == str:
+                            value = IPRPCRegistry.deserialize_from_json(value)
                     if not type(value) == intended_type:
                         raise IPRPCMessageException(
                             f"Message not valid:"
@@ -37,6 +40,11 @@ class IPRPCMessage:
             setattr(self, arg, value)
 
     def serialize_to_json(self):
+        return json.dumps({k: (v.serialize_to_json() if
+                           issubclass(type(v), IPRPCMessage) else
+                               v)
+                           for k, v in
+                           self.serialize_to_dict().items()})
         return json.dumps(self.serialize_to_dict())
 
     def serialize_to_dict(self):
@@ -46,6 +54,7 @@ class IPRPCMessage:
         return return_dict
 
     def __repr__(self):
+        return self.serialize_to_json()
         return_string = f"<{self.__class__.__name__}"
         if self.attributes.__len__() >= 1:
             last_attr = list(self.attributes.keys())[-1]
@@ -64,17 +73,17 @@ class IPRPCMessage:
 class IPRPCRegistry:
     message_types = {}
 
-    @classmethod
+    @ classmethod
     def register_rpc_call(cls, rpc_class: IPRPCMessage):
         cls.message_types.update({rpc_class.__name__: rpc_class})
         return rpc_class
 
-    @classmethod
+    @ classmethod
     def deserialize_from_json(cls, serialized_call: str):
         rpc_dict = json.loads(serialized_call)
         return IPRPCRegistry.deserialize_from_dict(rpc_dict)
 
-    @classmethod
+    @ classmethod
     def deserialize_from_dict(cls, serialized_call: dict):
         class_name = serialized_call.get('message_type')
         target_class = cls.message_types.get(class_name)
@@ -84,40 +93,45 @@ class IPRPCRegistry:
             raise IPRPCMessageException(f"Invalid RPC Call {class_name}")
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class PingRequestCall(IPRPCMessage):
     attributes = {}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class PingReplyCall(IPRPCMessage):
     attributes = {}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class PeeringHello(IPRPCMessage):
     attributes = {"initiator_id": str}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class PeeringHelloResponse(IPRPCMessage):
     attributes = {"responder_id": str}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class PeeringKeepalive(IPRPCMessage):
     attributes = {}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class FingerprintMessage(IPRPCMessage):
     attributes = {"public_key_cid": str,
                   "fingerprint": str}
 
 
-@IPRPCRegistry.register_rpc_call
+@ IPRPCRegistry.register_rpc_call
 class InvitationMessage(IPRPCMessage):
     attributes = {"public_key_cid": str,
                   "preshared_key": str,
                   "channels_per_peer": int,
                   "channel_rotation_period": int}
+
+
+@ IPRPCRegistry.register_rpc_call
+class RegistrationRequestMessage(IPRPCMessage):
+    attributes = {"invitation": InvitationMessage}

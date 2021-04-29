@@ -1,7 +1,9 @@
 from unittest import TestCase
 from ..messages import IPRPCMessage, \
     IPRPCRegistry, \
-    PingRequestCall
+    PingRequestCall, \
+    InvitationMessage,\
+    RegistrationRequestMessage
 from pillar.exceptions import IPRPCMessageException
 
 
@@ -73,3 +75,33 @@ class TestPingRequestCall(TestCase):
     def test_create_ping_call(self):
         ping_instance = PingRequestCall()
         self.assertEqual(PingRequestCall, type(ping_instance))
+
+
+class TestRegistrationRequestMessage(TestCase):
+    maxDiff = 1000
+
+    def setUp(self):
+        self.serial_data = (
+            '{\"message_type\": \"RegistrationRequestMessage\", '
+            '\"invitation\": \"{\\"message_type\\": '
+            '\\"InvitationMessage\\", \\"public_key_cid\\": '
+            '\\"bogus\\", \\"preshared_key\\": \\"bogus\\", '
+            '\\"channels_per_peer\\": 1, '
+            '\\"channel_rotation_period\\": 1}\"}'
+        )
+        inv = InvitationMessage(
+            public_key_cid='bogus',
+            preshared_key='bogus',
+            channels_per_peer=1,
+            channel_rotation_period=1
+        )
+
+        self.rrm = RegistrationRequestMessage(invitation=inv)
+
+    def test_serialize_registration_request_message(self):
+        output = self.rrm.serialize_to_json()
+        self.assertEqual(output, self.serial_data)
+
+    def test_deserialize_registration_request_message(self):
+        inst = IPRPCRegistry.deserialize_from_json(self.serial_data)
+        self.assertEqual(type(inst), RegistrationRequestMessage)
